@@ -28,6 +28,13 @@ class AneePay_Crypto_API_Handler {
 	protected $gateway;
 
 	/**
+	 * HTTP status of the last get_payment() call (0 = not called / transport error).
+	 *
+	 * @var int
+	 */
+	protected $last_http_code = 0;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param WC_Gateway_AneePay_Crypto $gateway Gateway instance.
@@ -410,6 +417,8 @@ class AneePay_Crypto_API_Handler {
 	 * @return array|null Payment data, or null on failure.
 	 */
 	public function get_payment( $payment_id ) {
+		$this->last_http_code = 0;
+
 		$url  = $this->api_url( 'payments/' . rawurlencode( $payment_id ) );
 		$args = $this->request_args();
 
@@ -424,6 +433,8 @@ class AneePay_Crypto_API_Handler {
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
 
+		$this->last_http_code = $code;
+
 		if ( 200 !== $code ) {
 			$this->log( 'get_payment', 'Unexpected status: ' . $code . ' body: ' . wp_remote_retrieve_body( $response ), 'error' );
 			return null;
@@ -437,6 +448,18 @@ class AneePay_Crypto_API_Handler {
 		}
 
 		return $data;
+	}
+
+	/**
+	 * HTTP status of the last get_payment() call (0 = transport error).
+	 *
+	 * Lets the poller tell "the payment does not exist" (404) from "we could
+	 * not ask" (0/5xx/429) before expiring an abandoned order.
+	 *
+	 * @return int
+	 */
+	public function last_http_code() {
+		return (int) $this->last_http_code;
 	}
 
 	/**

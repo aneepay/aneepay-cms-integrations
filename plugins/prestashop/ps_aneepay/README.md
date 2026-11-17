@@ -62,6 +62,11 @@ ps_aneepay/
 - The `Origin` header is the configured merchant domain (normalised to a bare
   host and validated on save); when it is empty the shop domain from the
   PrestaShop configuration is used, never the request `Host` header.
+- The cron job returns JSON counters (`checked`, `updated`, `expired`, `failed`),
+  polls the oldest 100 pending orders (7 days max) and expires abandoned ones: an
+  order older than `Abandoned Payment Expiry` (default 120 minutes, `0` disables)
+  is cancelled — or failed when no cancelled state is configured — once the API
+  confirms the payment did not go through.
 - PrestaShop has no built-in cron: add the cron URL above to your server crontab.
 - Uninstall keeps the `ps_aneepay_order` / `ps_aneepay_log` tables by default;
   disable "Keep data on uninstall" in the settings to drop them.

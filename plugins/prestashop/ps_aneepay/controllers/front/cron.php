@@ -29,37 +29,71 @@ class Ps_AneepayCronModuleFrontController extends ModuleFrontController {
 
 		file_put_contents($lock, (string) time());
 
-		$payload = array('success' => true, 'processed' => 0);
+		$payload = array('success' => true, 'checked' => 0, 'updated' => 0, 'expired' => 0, 'failed' => 0);
 
 		try {
 			$api       = $module->getApi();
-			$webhook   = new AneePayWebhook($api, new AneePayOrder(), $module->getStateMap());
-			$processed = 0;
+			$orders    = new AneePayOrder();
+			$webhook   = new AneePayWebhook($api, $orders, $module->getStateMap());
 
 			// Retention: drop log rows older than the window on every run.
 			$api->pruneLog();
 
-			foreach ((new AneePayOrder())->getPendingOrderIds() as $id_order) {
-				$row = (new AneePayOrder())->getByOrder((int) $id_order);
+			$expiry_minutes = (int) Configuration::get('ANEEPAY_EXPIRY_MINUTES');
 
-				if (!$row || empty($row['payment_id'])) {
-					continue;
-				}
-
-				$data = $api->get_payment((string) $row['payment_id']);
-
-				if (null === $data || empty($data['status'])) {
-					continue;
-				}
-
-				if ($webhook->apply((int) $id_order, (string) $data['status'])) {
-					$processed++;
-				}
+			if ($expiry_minutes <= 0) {
+				$expiry_minutes = 120;
 			}
 
-			$payload['processed'] = $processed;
+			foreach ($orders->getPendingOrders(100, 7) as $row) {
+				$id_order = (int) $row['id_order'];
+				$payload['checked']++;
+
+				// One broken payment must never abort the batch.
+				try {
+					$status = '';
+
+					if ('' !== (string) $row['payment_id']) {
+						$data = $api->get_payment((string) $row['payment_id']);
+
+						if (is_array($data) && !empty($data['status'])) {
+							$status = (string) $data['status'];
+						}
+					}
+
+					if ('' === $status) {
+						// Nothing to apply: decide whether the pending order has
+						// simply been abandoned. Only expire on a definite answer
+						// from the API, never on a transport error or 5xx.
+						$http    = '' !== (string) $row['payment_id'] ? $api->lastHttpCode() : 404;
+						$unknown = (0 === $http || $http >= 500 || 429 === $http);
+
+						if (!$unknown && $this->isExpired((string) $row['date_added'], $expiry_minutes)) {
+							$state_map = $module->getStateMap();
+							$terminal  = (!empty($state_map['cancelled']) && (int) $state_map['cancelled'] > 0) ? 'cancelled' : 'failed';
+
+							if ($webhook->apply($id_order, $terminal)) {
+								$payload['expired']++;
+							}
+
+							$api->write_log('cron', sprintf('Order #%d: no payment after %d minutes, marked %s.', $id_order, $expiry_minutes, $terminal), 'warning');
+						}
+
+						continue;
+					}
+
+					if ($webhook->apply($id_order, $status)) {
+						$payload['updated']++;
+					}
+				} catch (Exception $e) {
+					$payload['failed']++;
+					$api->write_log('cron', sprintf('Order #%d: %s', $id_order, $e->getMessage()), 'error');
+				}
+			}
 		} catch (Exception $e) {
-			$payload = array('success' => false, 'message' => $e->getMessage());
+			$payload['success'] = false;
+			$payload['message'] = $e->getMessage();
+			$payload['failed']++;
 		}
 
 		// Release the lock before responding: respond() exits the script, so a
@@ -69,6 +103,23 @@ class Ps_AneepayCronModuleFrontController extends ModuleFrontController {
 		}
 
 		$this->respond(200, $payload);
+	}
+
+	/**
+	 * Whether a pending order is older than the expiry window.
+	 *
+	 * @param string $date_added Mapping creation time (Y-m-d H:i:s).
+	 * @param int    $minutes    Expiry window in minutes.
+	 * @return bool
+	 */
+	protected function isExpired($date_added, $minutes) {
+		$created = strtotime((string) $date_added);
+
+		if (false === $created || $minutes <= 0) {
+			return false;
+		}
+
+		return (time() - $created) > ($minutes * 60);
 	}
 
 	protected function respond($code, $data) {

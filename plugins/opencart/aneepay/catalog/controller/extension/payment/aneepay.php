@@ -577,27 +577,64 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$this->cache->set('aneepay_cron_lock', 1, 300);
 
 		$client = null;
+		$stats  = array('checked' => 0, 'updated' => 0, 'expired' => 0, 'failed' => 0);
 
 		try {
 			$client  = $this->client();
-			$webhook = new AneePay_Webhook($this->registry, $client, $this->status_map());
+			$map     = $this->status_map();
+			$webhook = new AneePay_Webhook($this->registry, $client, $map);
 
 			$client->prune_log();
 
-			foreach ($this->model_extension_payment_aneepay->getPendingOrderIds() as $order_id) {
-				$mapping = $this->model_extension_payment_aneepay->getByOrderId($order_id);
+			$expiry_minutes = (int) $this->config->get('payment_aneepay_expiry_minutes');
 
-				if (!$mapping || empty($mapping['payment_id'])) {
-					continue;
+			if ($expiry_minutes <= 0) {
+				$expiry_minutes = 120;
+			}
+
+			foreach ($this->model_extension_payment_aneepay->getPendingOrders(100, 7) as $row) {
+				$order_id = (int) $row['order_id'];
+				$stats['checked']++;
+
+				// One broken payment must never abort the batch.
+				try {
+					$status = '';
+
+					if (!empty($row['payment_id'])) {
+						$data = $client->get_payment((string) $row['payment_id']);
+
+						if (is_array($data) && !empty($data['status'])) {
+							$status = (string) $data['status'];
+						}
+					}
+
+					if ('' === $status) {
+						// Nothing to apply: decide whether the pending order has
+						// simply been abandoned. Only expire when the API gave a
+						// definite answer, never on a transport error or 5xx.
+						$http    = !empty($row['payment_id']) ? $client->last_http_code() : 404;
+						$unknown = (0 === $http || $http >= 500 || 429 === $http);
+
+						if (!$unknown && $this->pending_is_expired((string) $row['date_added'], $expiry_minutes)) {
+							$terminal = (isset($map['cancelled']) && (int) $map['cancelled'] > 0) ? 'cancelled' : 'failed';
+
+							if ($webhook->apply($order_id, $terminal)) {
+								$stats['expired']++;
+							}
+
+							$client->write_log('cron', sprintf('Order #%d: no payment after %d minutes, marked %s.', $order_id, $expiry_minutes, $terminal), 'warning');
+						}
+
+						continue;
+					}
+
+					if ($webhook->apply($order_id, $status)) {
+						$stats['updated']++;
+					}
+				} catch (Throwable $e) {
+					$stats['failed']++;
+					$client->write_log('cron', sprintf('Order #%d: %s', $order_id, $e->getMessage()), 'error');
 				}
-
-				$data = $client->get_payment((string) $mapping['payment_id']);
-
-				if (null === $data || empty($data['status'])) {
-					continue;
-				}
-
-				$webhook->apply($order_id, (string) $data['status']);
 			}
 		} catch (Throwable $e) {
 			if ($client instanceof AneePay_Client) {
@@ -605,11 +642,30 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			} else {
 				error_log('AneePay cron: ' . $e->getMessage());
 			}
+
+			$stats['failed']++;
 		} finally {
 			$this->cache->delete('aneepay_cron_lock');
 		}
 
-		return 'ok';
+		return json_encode($stats);
+	}
+
+	/**
+	 * Whether a pending order is older than the expiry window.
+	 *
+	 * @param string $date_added Mapping creation time (Y-m-d H:i:s).
+	 * @param int    $minutes    Expiry window in minutes.
+	 * @return bool
+	 */
+	protected function pending_is_expired($date_added, $minutes) {
+		$created = strtotime((string) $date_added);
+
+		if (false === $created || $minutes <= 0) {
+			return false;
+		}
+
+		return (time() - $created) > ($minutes * 60);
 	}
 
 	/**

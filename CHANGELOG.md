@@ -42,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (PrestaShop) are unique keys now. Duplicates left by earlier releases are
   merged on the first write — the newest row survives and inherits
   `stock_restored` and a `success` status from its siblings.
+- Abandoned `pending` orders are expired by the poller: an order older than the
+  configurable window (default 120 minutes, `0` disables) is cancelled — or
+  failed when no cancelled state is configured — but only after the API
+  confirms the payment did not go through. A transport error, `5xx` or `429`
+  never expires an order. Every platform gained the matching `Expiry` setting.
+- The status poller reports counters (`checked`, `updated`, `expired`,
+  `failed`) instead of a bare `ok`.
 
 ### Changed
 
@@ -58,6 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The order mapping is written with an upsert instead of `DELETE` + `INSERT`:
   `stock_restored` is never reset (no double stock return) and there is no
   window where the mapping row is missing while a webhook resolves an order.
+- The status poller handles one order at a time: a failing payment no longer
+  aborts the batch, each run is bounded (oldest 50 orders in WooCommerce, 100 in
+  OpenCart/PrestaShop, 7 days max), and `get_payment()` returns `null` instead
+  of throwing while exposing the HTTP status.
 
 ### Changed
 

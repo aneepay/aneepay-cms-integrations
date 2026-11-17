@@ -35,6 +35,13 @@ class AneePay_Client {
 	protected $db;
 
 	/**
+	 * HTTP status of the most recent get_payment() call.
+	 *
+	 * @var int
+	 */
+	protected $last_http_code = 0;
+
+	/**
 	 * @param array  $settings Extension settings.
 	 * @param object $db       OpenCart DB adapter (for the request log).
 	 */
@@ -205,13 +212,47 @@ class AneePay_Client {
 	/**
 	 * Fetch payment details.
 	 *
+	 * Never throws: the cron poller must survive a single missing or broken
+	 * payment without aborting the whole batch. Compare last_http_code() to
+	 * tell "not found" (404) apart from a transport or API failure.
+	 *
 	 * @param string $payment_id Payment UUID.
 	 * @return array|null Payment data, or null on failure.
 	 */
 	public function get_payment($payment_id) {
+		$this->last_http_code = 0;
+
 		$response = $this->request('GET', $this->api_url('payments/' . rawurlencode($payment_id)), null);
 
-		return $this->decode_response($response, 200);
+		$this->last_http_code = (int) $response['code'];
+
+		if (!empty($response['error'])) {
+			$this->write_log('request', 'GET payments/' . $payment_id . ' failed: ' . $response['error'], 'error');
+
+			return null;
+		}
+
+		if (404 === $this->last_http_code) {
+			return null;
+		}
+
+		try {
+			return $this->decode_response($response, 200);
+		} catch (AneePay_Api_Exception $e) {
+			$this->last_http_code = (int) $e->get_http_code();
+			$this->write_log('request', 'GET payments/' . $payment_id . ' failed: ' . $e->getMessage(), 'error');
+
+			return null;
+		}
+	}
+
+	/**
+	 * HTTP status of the most recent get_payment() call.
+	 *
+	 * @return int Status code, or 0 when the request never reached the API.
+	 */
+	public function last_http_code() {
+		return (int) $this->last_http_code;
 	}
 
 	/**

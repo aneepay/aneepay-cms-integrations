@@ -37,6 +37,7 @@ $_['entry_cancelled_status'] = 'Cancelled status';
 $_['entry_debug']            = 'Debug Log';
 $_['help_debug']             = 'Log every AneePay API request (kept for 14 days). Errors are always logged, even when this is disabled.';
 $_['entry_cron_interval']    = 'Status Sync Interval';
+$_['entry_expiry_minutes']   = 'Abandoned Payment Expiry (minutes)';
 $_['entry_fee_rule']         = 'Fee rule';
 $_['entry_keep_data']        = 'On uninstall';
 
@@ -56,6 +57,7 @@ $_['help_site_domain']      = 'Your verified merchant domain (Origin header). Le
 $_['help_test_mode']        = 'When enabled, payments are created on the Amoy testnet with USDC and the is_safe check is bypassed.';
 $_['help_exchange_rate']    = 'Used when the auto rate is unavailable. How many units of store currency make one token (≈1 USD).';
 $_['help_cron_interval']    = 'How often to poll AneePay for pending orders. Set it up in your cron as shown below.';
+$_['help_expiry_minutes']   = 'Pending orders older than this are cancelled by the cron job once the API confirms the payment did not go through. Set 0 to disable. Default: 120.';
 $_['help_keep_data']        = 'Keep AneePay orders and request logs in the database when the extension is uninstalled. Disable to delete them.';
 
 // Errors

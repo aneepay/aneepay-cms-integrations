@@ -51,6 +51,11 @@ install.xml                                            # ocmod manifest (add-on 
 - The `Origin` header is the configured merchant domain (normalised to a bare
   host and validated on save); when it is empty the store URL from the OpenCart
   configuration is used, never the request `Host` header.
+- The cron job returns JSON counters (`checked`, `updated`, `expired`, `failed`),
+  polls the oldest 100 pending orders (7 days max) and expires abandoned ones: an
+  order older than `Abandoned Payment Expiry` (default 120 minutes, `0` disables)
+  is cancelled — or failed when no cancelled status is configured — once the API
+  confirms the payment did not go through.
 - Cron is not built into OpenCart: add the cron URL above to your server crontab.
 - Uninstall keeps the `aneepay_order` / `aneepay_log` tables by default; set
   "On uninstall" to "Delete data" in the settings to drop them.

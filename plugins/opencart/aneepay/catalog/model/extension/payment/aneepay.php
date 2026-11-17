@@ -168,19 +168,26 @@ class ModelExtensionPaymentAneePay extends Model {
 	}
 
 	/**
-	 * All orders still awaiting a hosted payment (for the cron poller).
+	 * Orders still awaiting a hosted payment, oldest first.
 	 *
-	 * @return array<int> Order ids.
+	 * Bounded by a limit and by age so the poller never walks ancient rows:
+	 * payments have no TTL on the vendor side, so anything older than the
+	 * aging window is handled by the expiry pass instead.
+	 *
+	 * @param int $limit        Maximum rows per run.
+	 * @param int $max_age_days Ignore rows older than this many days.
+	 * @return array<int,array{order_id:int,payment_id:string,date_added:string}>
 	 */
-	public function getPendingOrderIds() {
-		$query = $this->db->query("SELECT `order_id` FROM `" . DB_PREFIX . "aneepay_order` WHERE `payment_status` IN ('', 'pending') ORDER BY `order_id` ASC");
+	public function getPendingOrders($limit = 100, $max_age_days = 7) {
+		$limit        = max(1, (int) $limit);
+		$max_age_days = max(1, (int) $max_age_days);
 
-		$ids = array();
+		$query = $this->db->query("SELECT `order_id`, `payment_id`, `date_added` FROM `" . DB_PREFIX . "aneepay_order`
+			WHERE `payment_status` IN ('', 'pending')
+				AND `date_added` > DATE_SUB(NOW(), INTERVAL " . $max_age_days . " DAY)
+			ORDER BY `date_added` ASC, `order_id` ASC
+			LIMIT " . $limit);
 
-		foreach ($query->rows as $row) {
-			$ids[] = (int) $row['order_id'];
-		}
-
-		return $ids;
+		return $query->rows;
 	}
 }

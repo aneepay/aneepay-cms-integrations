@@ -21,6 +21,9 @@ class AneePayApi {
 	/** @var object|null Database adapter for the request log. */
 	protected $db;
 
+	/** @var int HTTP status of the last get_payment() call (0 = not called). */
+	protected $last_http_code = 0;
+
 	/**
 	 * @param array  $settings Extension settings.
 	 * @param object $db       Legacy DB adapter (Db instance) for the request log.
@@ -133,13 +136,46 @@ class AneePayApi {
 	/**
 	 * Fetch payment details.
 	 *
+	 * Tracing callers (cron, "check now") must survive a single broken
+	 * payment, so failures are logged and reported instead of thrown.
+	 *
 	 * @param string $payment_id Payment UUID.
 	 * @return array|null Payment data, or null on failure.
 	 */
 	public function get_payment($payment_id) {
+		$this->last_http_code = 0;
+
 		$response = $this->request('GET', $this->api_url('payments/' . rawurlencode($payment_id)), null);
 
-		return $this->decode_response($response, 200);
+		$this->last_http_code = (int) $response['code'];
+
+		if ('' !== (string) $response['error']) {
+			$this->write_log('request', 'GET payments/' . $payment_id . ' failed: ' . $response['error'], 'error');
+
+			return null;
+		}
+
+		if (404 === $this->last_http_code) {
+			return null;
+		}
+
+		try {
+			return $this->decode_response($response, 200);
+		} catch (AneePayApiException $e) {
+			$this->last_http_code = (int) $e->getHttpCode();
+			$this->write_log('request', 'GET payments/' . $payment_id . ' failed: ' . $e->getMessage(), 'error');
+
+			return null;
+		}
+	}
+
+	/**
+	 * HTTP status of the last get_payment() call (0 when it never ran).
+	 *
+	 * @return int
+	 */
+	public function lastHttpCode() {
+		return (int) $this->last_http_code;
 	}
 
 	/**

@@ -232,6 +232,13 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 					'every_thirty_minutes'  => __( 'Every 30 minutes', 'aneepay-crypto-gateway' ),
 				),
 			),
+			'expiry_minutes' => array(
+				'title'       => __( 'Abandoned Payment Expiry (minutes)', 'aneepay-crypto-gateway' ),
+				'type'        => 'text',
+				'description' => __( 'Pending orders older than this are cancelled by the sync job once the API confirms the payment did not go through. Set 0 to disable. Default: 120.', 'aneepay-crypto-gateway' ),
+				'default'     => '120',
+				'desc_tip'    => true,
+			),
 			array(
 				'type' => 'sectionend',
 				'id'   => 'aneepay_section_advanced',
@@ -1394,59 +1401,128 @@ function aneepay_ajax_check_status() {
 /**
  * WP-Cron handler: sync all pending AneePay orders.
  *
- * @return void
+ * Polls every pending order in small batches (newest first, nothing older
+ * than a week) and accounts for each outcome. A single broken payment never
+ * aborts the batch.
+ *
+ * @return array Counters: checked, updated, expired, failed.
  */
 function aneepay_cron_sync_pending_orders() {
 	// No-overlap guard: never run two sync batches concurrently.
 	if ( get_transient( 'aneepay_cron_lock' ) ) {
-		return;
+		return array();
 	}
 
 	set_transient( 'aneepay_cron_lock', 1, 5 * MINUTE_IN_SECONDS );
 
+	$stats = array(
+		'checked' => 0,
+		'updated' => 0,
+		'expired' => 0,
+		'failed'  => 0,
+	);
+
 	try {
 		$query = wc_get_orders(
 			array(
-				'limit'        => 20,
-				'status'       => array( 'pending', 'on-hold' ),
+				'limit'          => 50,
+				'status'         => array( 'pending', 'on-hold' ),
 				'payment_method' => ANEEPAY_PAYMENT_GATEWAY_ID,
-				'return'       => 'ids',
+				'return'         => 'ids',
+				'orderby'        => 'date',
+				'order'          => 'ASC',
+				'date_created'   => '>' . ( time() - 7 * DAY_IN_SECONDS ),
 			)
 		);
 
 		foreach ( $query as $order_id ) {
-			$order = wc_get_order( $order_id );
+			$stats['checked']++;
 
-			if ( ! $order ) {
-				continue;
+			// One broken order must never abort the batch.
+			try {
+				aneepay_sync_pending_order( $order_id, $stats );
+			} catch ( Exception $e ) {
+				$stats['failed']++;
+				aneepay_log_sync_error( $e );
 			}
-
-			$status = $order->get_meta( '_aneepay_payment_status', true );
-
-			if ( in_array( $status, array( 'success', 'failed', 'cancelled' ), true ) ) {
-				continue;
-			}
-
-			$payment_id = (string) $order->get_meta( '_aneepay_payment_id', true );
-
-			if ( empty( $payment_id ) ) {
-				continue;
-			}
-
-			$gateway = new WC_Gateway_AneePay_Crypto();
-			$data    = $gateway->api_handler->get_payment( $payment_id );
-
-			if ( null === $data || empty( $data['status'] ) ) {
-				continue;
-			}
-
-			aneepay_apply_payment_status( $order, $data['status'] );
 		}
 	} catch ( Exception $e ) {
+		$stats['failed']++;
 		aneepay_log_sync_error( $e );
 	} finally {
 		delete_transient( 'aneepay_cron_lock' );
 	}
+
+	return $stats;
+}
+
+/**
+ * Sync one pending order and update the batch counters.
+ *
+ * Applies the status reported by the API; when the API gives a definite
+ * answer that there is no payment, an abandoned order past the expiry window
+ * is failed so the stock is released.
+ *
+ * @param int   $order_id Order id.
+ * @param array $stats    Batch counters (by reference).
+ * @return void
+ */
+function aneepay_sync_pending_order( $order_id, &$stats ) {
+	$order = wc_get_order( $order_id );
+
+	if ( ! $order ) {
+		$stats['failed']++;
+		return;
+	}
+
+	$status = $order->get_meta( '_aneepay_payment_status', true );
+
+	if ( in_array( $status, array( 'success', 'failed', 'cancelled' ), true ) ) {
+		return;
+	}
+
+	$payment_id = (string) $order->get_meta( '_aneepay_payment_id', true );
+	$gateway    = new WC_Gateway_AneePay_Crypto();
+	$data       = empty( $payment_id ) ? null : $gateway->api_handler->get_payment( $payment_id );
+
+	if ( is_array( $data ) && ! empty( $data['status'] ) ) {
+		aneepay_apply_payment_status( $order, $data['status'] );
+		$stats['updated']++;
+		return;
+	}
+
+	// No status to apply. Expire only when the API gave a definite answer:
+	// a transport error, a 5xx or a 429 means "we could not ask", not
+	// "there is no payment".
+	$code    = empty( $payment_id ) ? 404 : $gateway->api_handler->last_http_code();
+	$unknown = ( 0 === $code || $code >= 500 || 429 === $code );
+
+	if ( $unknown ) {
+		return;
+	}
+
+	$expiry = (int) $gateway->get_option( 'expiry_minutes', 120 );
+
+	if ( $expiry <= 0 ) {
+		return;
+	}
+
+	$created = $order->get_date_created();
+
+	if ( ! $created || ( time() - $created->getTimestamp() ) <= ( $expiry * 60 ) ) {
+		return;
+	}
+
+	aneepay_apply_payment_status( $order, 'failed' );
+	$order->add_order_note(
+		sprintf(
+			/* translators: 1: expiry window in minutes. */
+			__( 'AneePay: no payment within %d minutes, the order was failed and its stock released.', 'aneepay-crypto-gateway' ),
+			$expiry
+		)
+	);
+	$gateway->api_handler->log( 'cron_sync', sprintf( 'Order #%d expired after %d minutes without a payment.', $order_id, $expiry ), 'warning' );
+	$stats['expired']++;
 }
 add_action( 'aneepay_sync_pending_orders', 'aneepay_cron_sync_pending_orders' );
 

@@ -62,7 +62,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'status', 'title', 'description', 'account_id', 'webhook_secret', 'site_domain',
 			'test_mode', 'token', 'network', 'rate_source', 'exchange_rate',
 			'pending_status_id', 'paid_status_id', 'failed_status_id', 'cancelled_status_id',
-			'debug', 'cron_interval', 'fee_rule', 'keep_data',
+			'debug', 'cron_interval', 'expiry_minutes', 'fee_rule', 'keep_data',
 		);
 
 		foreach ($fields as $field) {
@@ -88,6 +88,10 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 		if ('' === $data['payment_aneepay_cron_interval']) {
 			$data['payment_aneepay_cron_interval'] = 'every_five_minutes';
+		}
+
+		if ('' === $data['payment_aneepay_expiry_minutes']) {
+			$data['payment_aneepay_expiry_minutes'] = '120';
 		}
 
 		if ('' === $data['payment_aneepay_fee_rule']) {

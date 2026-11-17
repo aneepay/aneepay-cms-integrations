@@ -180,20 +180,37 @@ class AneePayOrder {
 		return (bool) Db::getInstance()->update(self::TABLE, array('stock_restored' => 1), 'id_order = ' . (int) $id_order);
 	}
 
-	/** @return array<int> */
-	public function getPendingOrderIds() {
-		$db  = Db::getInstance();
-		$ids = array();
+	/**
+	 * Pending mappings worth polling, oldest first.
+	 *
+	 * Bounded on both axes: a hard limit keeps one cron run cheap, and the
+	 * age cut-off stops an ancient abandoned order from being polled forever.
+	 *
+	 * @param int $limit        Maximum number of rows.
+	 * @param int $max_age_days Ignore mappings older than this many days.
+	 * @return array<int,array{id_order:int,payment_id:string,date_added:string}>
+	 */
+	public function getPendingOrders($limit = 100, $max_age_days = 7) {
+		$limit        = max(1, (int) $limit);
+		$max_age_days = max(1, (int) $max_age_days);
 
-		$rows = $db->executeS(
-			'SELECT `id_order` FROM `' . _DB_PREFIX_ . self::TABLE . '`
-			 WHERE `payment_status` IN (\'\', \'pending\') ORDER BY `id_order` ASC'
+		$rows = Db::getInstance()->executeS(
+			'SELECT `id_order`, `payment_id`, `date_added` FROM `' . _DB_PREFIX_ . self::TABLE . '`
+			 WHERE `payment_status` IN (\'\', \'pending\')
+			   AND `date_added` > DATE_SUB(NOW(), INTERVAL ' . $max_age_days . ' DAY)
+			 ORDER BY `date_added` ASC, `id_order` ASC
+			 LIMIT ' . $limit
 		);
 
-		foreach ($rows as $row) {
-			$ids[] = (int) $row['id_order'];
+		if (!is_array($rows)) {
+			return array();
 		}
 
-		return $ids;
+		foreach ($rows as $index => $row) {
+			$rows[$index]['id_order']   = (int) $row['id_order'];
+			$rows[$index]['payment_id'] = (string) $row['payment_id'];
+		}
+
+		return $rows;
 	}
 }
