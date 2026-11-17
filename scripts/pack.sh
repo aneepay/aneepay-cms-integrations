@@ -6,14 +6,18 @@
 #   ./scripts/pack.sh <platform>
 #
 #   platform  wc | oc | ps         (или "all" для всех трёх)
+#             check                (только проверки, без упаковки)
 #
 # Версия берётся ТОЛЬКО из ./VERSION (единый источник истины). Второй
 # аргумент убран намеренно: передавать версию мимо VERSION нельзя.
+#
+# После сборки контрольные суммы артефактов пишутся в dist/SHA256SUMS.
 #
 # Примеры:
 #   ./scripts/pack.sh wc                       # → dist/wc/aneepay.zip
 #   ./scripts/pack.sh oc                       # → dist/oc/aneepay-<ver>.ocmod.zip
 #   ./scripts/pack.sh ps                       # → dist/ps/ps_aneepay.zip
+#   ./scripts/pack.sh check                    # версия + линт, без архивов
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -174,6 +178,62 @@ zip_stage() {
   rm -rf "$stage"
 }
 
+src_of() {
+  case "$1" in
+    wc) echo "$SRC_WC" ;;
+    oc) echo "$SRC_OC" ;;
+    ps) echo "$SRC_PS" ;;
+    *) fail "неизвестная платформа: $1" ;;
+  esac
+}
+
+# Artifact name of a platform at the current VERSION.
+artifact_of() {
+  case "$1" in
+    wc) echo "$DIST/wc/aneepay.zip" ;;
+    oc) echo "$DIST/oc/aneepay-${VERSION}.ocmod.zip" ;;
+    ps) echo "$DIST/ps/ps_aneepay.zip" ;;
+  esac
+}
+
+# Drop artifacts of other versions so dist/ never holds a stale archive next to
+# the fresh one (and SHA256SUMS stays unambiguous).
+clean_platform_dist() {
+  case "$1" in
+    wc) rm -f "$DIST/wc/aneepay-"*.zip ;;
+    oc) rm -f "$DIST/oc/aneepay-"*.ocmod.zip ;;
+    ps) rm -f "$DIST/ps/ps_aneepay-"*.zip ;;
+  esac
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1"
+  else
+    shasum -a 256 "$1"   # BSD/macOS
+  fi
+}
+
+# Write dist/SHA256SUMS for every artifact that exists in dist/. Paths are
+# relative to dist/ so `cd dist && sha256sum -c SHA256SUMS` works as-is.
+write_checksums() {
+  local out="$DIST/SHA256SUMS" tmp="$DIST/SHA256SUMS.tmp.$$" p f rel
+  : > "$tmp"
+  for p in wc oc ps; do
+    f="$(artifact_of "$p")"
+    [ -f "$f" ] || continue
+    rel="${f#"$DIST"/}"
+    ( cd "$DIST" && sha256_of "$rel" ) >> "$tmp"
+  done
+  if [ -s "$tmp" ]; then
+    mv "$tmp" "$out"
+    echo "   -> $out"
+  else
+    rm -f "$tmp"
+    warn "нет артефактов — SHA256SUMS не создан"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # per-platform assembly
 # ---------------------------------------------------------------------------
@@ -245,7 +305,22 @@ EOF
 # main
 # ---------------------------------------------------------------------------
 
-[ -n "$PLATFORM" ] || fail "укажи платформу: wc | oc | ps | all"
+[ -n "$PLATFORM" ] || fail "укажи платформу: wc | oc | ps | all (или check)"
+
+# check: те же проверки, что перед сборкой, но без упаковки. Используется в CI
+# (job verify) и локально перед коммитом.
+if [ "$PLATFORM" = "check" ]; then
+  verify_versions
+  for p in wc oc ps; do
+    src="$(src_of "$p")"
+    [ -d "$src" ] || fail "нет каталога $src"
+    echo "==> Проверка: $p"
+    php_lint "$src"
+    check_platform "$p"
+  done
+  echo "Проверки пройдены (версия и линт), артефакты не собирались."
+  exit 0
+fi
 
 platforms=("$PLATFORM")
 [ "$PLATFORM" = "all" ] && platforms=(wc oc ps)
@@ -255,18 +330,14 @@ verify_versions
 mkdir -p "$DIST"
 
 for p in "${platforms[@]}"; do
-  case "$p" in
-    wc) src="$SRC_WC" ;;
-    oc) src="$SRC_OC" ;;
-    ps) src="$SRC_PS" ;;
-    *) fail "неизвестная платформа: $p" ;;
-  esac
+  src="$(src_of "$p")"
 
   [ -d "$src" ] || fail "нет каталога $src"
 
   echo "==> Упаковка: $p (v$VERSION)"
   php_lint "$src"
   check_platform "$p"
+  clean_platform_dist "$p"
 
   case "$p" in
     wc) build_wc ;;
@@ -274,5 +345,7 @@ for p in "${platforms[@]}"; do
     ps) build_ps ;;
   esac
 done
+
+write_checksums
 
 echo "Готово. Артефакты в $DIST"

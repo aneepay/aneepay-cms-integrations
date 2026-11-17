@@ -7,8 +7,44 @@ on:
   pull_request:
 
 jobs:
+  # Gate for every build and every release: the version has one source
+  # (VERSION), matches the tag, and all plugins lint clean.
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: zip
+
+      - name: VERSION matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(tr -d '[:space:]' < VERSION)"
+          echo "tag=$tag VERSION=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag v$tag does not match VERSION ($version)"
+            exit 1
+          fi
+
+      # Fails if any version carrier (WC header + ANEEPAY_VERSION,
+      # OC install.xml, PS $this->version) diverges from VERSION, and runs
+      # php -l over all plugins. Nothing is packaged here.
+      - name: Version sources and lint
+        run: ./scripts/pack.sh check
+
+      # TODO(B4): add phpstan (level 6) + phpcs (PSR-12) here together with the
+      # test harness. They stay inside this job so a release can never skip them.
+
   pack:
     name: pack (${{ matrix.platform }})
+    needs: verify
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -36,7 +72,7 @@ jobs:
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: pack
+    needs: [verify, pack]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,3 +93,4 @@ jobs:
             dist/wc/aneepay.zip
             dist/oc/aneepay-*.ocmod.zip
             dist/ps/ps_aneepay.zip
+            dist/SHA256SUMS

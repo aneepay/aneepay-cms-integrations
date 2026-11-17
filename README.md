@@ -32,6 +32,17 @@ OpenCart `install.xml` or PrestaShop `$version` diverge from it, and the version
 is stamped into the staged copy before zipping. Each platform is packaged with
 the correct root path.
 
+`./scripts/pack.sh check` runs the same verification (version sources + `php -l`)
+without packaging anything; CI requires it before any release, and it is the
+fast local pre-commit check.
+
+Every build writes `dist/SHA256SUMS` for the artifacts it produced, and stale
+artifacts of other versions are removed from `dist/<platform>/` first:
+
+```bash
+cd dist && sha256sum -c SHA256SUMS
+```
+
 ## Local development
 
 ### WooCommerce

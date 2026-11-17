@@ -15,7 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Nothing yet.
+- `./scripts/pack.sh check` — verifies the single version source and lints all
+  plugins without packaging anything.
+- `dist/SHA256SUMS` with the checksums of the built artifacts; artifacts of
+  other versions are removed from `dist/<platform>/` before packing.
+
+### Changed
+
+- CI: a required `verify` job (tag must equal `VERSION`, version sources, lint)
+  now gates both `pack` and `release`; the release publishes `SHA256SUMS`.
 
 ## [1.2.0] - 2026-10-22
 
