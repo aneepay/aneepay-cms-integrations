@@ -37,13 +37,13 @@ class ControllerExtensionPaymentAneePay extends Controller {
 	protected function client() {
 		$this->load_lib();
 
-		$host = (string) ($this->request->server['HTTP_HOST'] ?? '');
+		$site_domain = $this->normalize_site_domain((string) $this->config->get('payment_aneepay_site_domain'));
 
 		$settings = array(
 			'account_id'     => (string) $this->config->get('payment_aneepay_account_id'),
 			'webhook_secret' => (string) $this->config->get('payment_aneepay_webhook_secret'),
-			'site_domain'    => (string) $this->config->get('payment_aneepay_site_domain'),
-			'host'           => $host,
+			'site_domain'    => $site_domain,
+			'host'           => '' !== $site_domain ? $site_domain : $this->canonical_host(),
 			'token'          => (string) $this->config->get('payment_aneepay_token', 'usdt'),
 			'network'        => (string) $this->config->get('payment_aneepay_network', 'polygon'),
 			'test_mode'      => $this->setting_bool('payment_aneepay_test_mode'),
@@ -65,6 +65,51 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$value = $this->config->get($key);
 
 		return in_array($value, array('1', 'on', 'yes', true), true);
+	}
+
+	/**
+	 * Canonical storefront host, never taken from the current request.
+	 *
+	 * The Origin header identifies the merchant account at AneePay, so it must
+	 * not depend on a client-supplied `Host` header (SEC-10). The store URL
+	 * from the OpenCart configuration is the only fallback.
+	 *
+	 * @return string Bare host, or '' when the store URL is unusable.
+	 */
+	protected function canonical_host() {
+		$candidates = array(
+			(string) $this->config->get('config_ssl'),
+			(string) $this->config->get('config_url'),
+		);
+
+		foreach ($candidates as $candidate) {
+			$host = parse_url($candidate, PHP_URL_HOST);
+
+			if (is_string($host) && '' !== $host) {
+				return strtolower($host);
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Reduce a configured site domain to a bare host.
+	 *
+	 * Accepts `shop.example.com`, `https://shop.example.com/`,
+	 * `shop.example.com:8443` — the API expects a host, not a URL.
+	 *
+	 * @param string $value Raw setting value.
+	 * @return string
+	 */
+	protected function normalize_site_domain($value) {
+		$value = strtolower(trim((string) $value));
+		$value = preg_replace('#^[a-z][a-z0-9+.\-]*://#', '', $value);
+		$value = preg_split('#[/?\#]#', $value);
+		$value = rtrim((string) $value[0], '.');
+		$value = preg_replace('#:[0-9]+$#', '', $value);
+
+		return (string) $value;
 	}
 
 	/**

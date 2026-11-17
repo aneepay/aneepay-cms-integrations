@@ -59,6 +59,9 @@ ps_aneepay/
 - One mapping per order: `id_order` is unique. Duplicates from older releases
   are merged on the first write (newest row wins, keeps `stock_restored`), and
   the row is upserted, so `stock_restored` is never reset.
+- The `Origin` header is the configured merchant domain (normalised to a bare
+  host and validated on save); when it is empty the shop domain from the
+  PrestaShop configuration is used, never the request `Host` header.
 - PrestaShop has no built-in cron: add the cron URL above to your server crontab.
 - Uninstall keeps the `ps_aneepay_order` / `ps_aneepay_log` tables by default;
   disable "Keep data on uninstall" in the settings to drop them.

@@ -48,6 +48,9 @@ install.xml                                            # ocmod manifest (add-on 
 - One mapping per order: `order_id` is unique. Duplicates from older releases are
   merged on the first write (newest row wins, keeps `stock_restored`), and the
   row is upserted, so `stock_restored` is never reset.
+- The `Origin` header is the configured merchant domain (normalised to a bare
+  host and validated on save); when it is empty the store URL from the OpenCart
+  configuration is used, never the request `Host` header.
 - Cron is not built into OpenCart: add the cron URL above to your server crontab.
 - Uninstall keeps the `aneepay_order` / `aneepay_log` tables by default; set
   "On uninstall" to "Delete data" in the settings to drop them.

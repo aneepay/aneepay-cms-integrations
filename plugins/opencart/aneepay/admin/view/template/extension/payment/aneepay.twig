@@ -110,6 +110,7 @@
             <label class="col-sm-2 control-label" for="input-site-domain">{{ entry_site_domain }}</label>
             <div class="col-sm-10">
               <input type="text" name="payment_aneepay_site_domain" value="{{ payment_aneepay_site_domain }}" placeholder="{{ entry_site_domain }}" id="input-site-domain" class="form-control" />
+              {% if error_site_domain %}<div class="text-danger">{{ error_site_domain }}</div>{% endif %}
             </div>
           </div>
           <div class="form-group">

@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   logged, so production incidents stay diagnosable, and log rows older than
   14 days are pruned on every cron run plus probabilistically on write.
   PrestaShop gained the missing `Debug log` setting.
+- The `Origin` header can no longer follow the request: OpenCart and PrestaShop
+  fell back to the incoming `Host` header, which a client controls. The
+  configured merchant domain is now normalised to a bare host and validated on
+  save, and the fallback is the store URL from the platform configuration.
+  WooCommerce already used the site domain and now normalises it too.
 - The order mapping is written with an upsert instead of `DELETE` + `INSERT`:
   `stock_restored` is never reset (no double stock return) and there is no
   window where the mapping row is missing while a webhook resolves an order.

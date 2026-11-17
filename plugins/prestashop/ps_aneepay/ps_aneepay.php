@@ -182,7 +182,9 @@ class Ps_Aneepay extends PaymentModule {
 	 * Canonical storefront host used as the Origin fallback.
 	 *
 	 * Tries the shop domain fields, the storefront base URL and the core URL
-	 * constants, then the current HTTP host. Only the host is returned (no
+	 * constants. The current request host is deliberately never used: the
+	 * Origin header identifies the merchant account, so it must not follow a
+	 * client-supplied `Host` header (SEC-10). Only the host is returned (no
 	 * scheme, port or path).
 	 *
 	 * @return string Host, or '' when it cannot be resolved.
@@ -207,8 +209,6 @@ class Ps_Aneepay extends PaymentModule {
 			$candidates[] = (string) _PS_BASE_URL_;
 		}
 
-		$candidates[] = (string) Tools::getHttpHost();
-
 		foreach ($candidates as $candidate) {
 			$host = $this->hostFromUrl($candidate);
 
@@ -218,6 +218,39 @@ class Ps_Aneepay extends PaymentModule {
 		}
 
 		return '';
+	}
+
+	/**
+	 * Reduce a configured site domain to a bare host.
+	 *
+	 * Accepts `shop.example.com`, `https://shop.example.com/` and
+	 * `shop.example.com:8443`; the API expects a host, not a URL.
+	 *
+	 * @param string $value Raw setting value.
+	 * @return string
+	 */
+	protected function normalizeSiteDomain($value) {
+		$value = strtolower(trim((string) $value));
+		$value = preg_replace('#^[a-z][a-z0-9+.\-]*://#', '', $value);
+		$value = preg_split('#[/?\#]#', $value);
+		$value = rtrim((string) $value[0], '.');
+		$value = preg_replace('#:[0-9]+$#', '', $value);
+
+		return (string) $value;
+	}
+
+	/**
+	 * Whether the value looks like a hostname or an IP address.
+	 *
+	 * @param string $host Normalised host.
+	 * @return bool
+	 */
+	protected function isValidSiteDomain($host) {
+		if (false !== filter_var($host, FILTER_VALIDATE_IP)) {
+			return true;
+		}
+
+		return (bool) preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/', $host);
 	}
 
 	/**
@@ -707,7 +740,7 @@ class Ps_Aneepay extends PaymentModule {
 		$valueMap = array(
 			'ANEEPAY_ACCOUNT_ID'      => trim((string) Tools::getValue('ANEEPAY_ACCOUNT_ID')),
 			'ANEEPAY_WEBHOOK_SECRET'  => (string) Tools::getValue('ANEEPAY_WEBHOOK_SECRET'),
-			'ANEEPAY_SITE_DOMAIN'     => (string) Tools::getValue('ANEEPAY_SITE_DOMAIN'),
+			'ANEEPAY_SITE_DOMAIN'     => $this->normalizeSiteDomain((string) Tools::getValue('ANEEPAY_SITE_DOMAIN')),
 			'ANEEPAY_KEEP_DATA'       => Tools::getValue('ANEEPAY_KEEP_DATA') ? '1' : '0',
 			'ANEEPAY_TOKEN'           => (string) Tools::getValue('ANEEPAY_TOKEN'),
 			'ANEEPAY_NETWORK'         => (string) Tools::getValue('ANEEPAY_NETWORK'),
@@ -729,6 +762,10 @@ class Ps_Aneepay extends PaymentModule {
 			&& (!is_numeric($valueMap['ANEEPAY_EXCHANGE_RATE']) || (float) $valueMap['ANEEPAY_EXCHANGE_RATE'] <= 0)
 		) {
 			$errors[] = $this->l('Manual exchange rate must be a positive number.');
+		}
+
+		if ('' !== $valueMap['ANEEPAY_SITE_DOMAIN'] && !$this->isValidSiteDomain($valueMap['ANEEPAY_SITE_DOMAIN'])) {
+			$errors[] = $this->l('Site domain must be a bare hostname, for example shop.example.com.');
 		}
 
 		if (!empty($errors)) {
@@ -786,7 +823,7 @@ class Ps_Aneepay extends PaymentModule {
 					'type'     => 'text',
 					'label'    => $this->l('Domain'),
 					'name'     => 'ANEEPAY_SITE_DOMAIN',
-					'desc'     => $this->l('Your verified merchant domain (Origin header). Empty = use your shop host.'),
+					'desc'     => $this->l('Your verified merchant domain, sent in the Origin header. Enter a bare host such as shop.example.com. Empty = the shop domain from the PrestaShop configuration (never the request host).'),
 				),
 				array(
 					'type'     => 'switch',

@@ -63,6 +63,7 @@ $_['error_permission']       = 'Warning: You do not have permission to modify An
 $_['error_account_id']       = 'AneePay Account ID is required (valid UUID).';
 $_['error_webhook_secret']   = 'AneePay Webhook Secret is required to verify payment confirmations.';
 $_['error_exchange_rate']    = 'Manual Exchange Rate must be a positive number.';
+$_['error_site_domain']      = 'Origin domain must be a bare hostname, for example shop.example.com.';
 $_['error_warning']          = 'Warning: Please check the form carefully for errors!';
 
 // Buttons / misc

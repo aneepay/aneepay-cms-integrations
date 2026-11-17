@@ -218,6 +218,16 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			$this->error['exchange_rate'] = $this->language->get('error_exchange_rate');
 		}
 
+		// The Origin header identifies the merchant at AneePay: keep it a bare
+		// host, never a URL, and never derive it from the current request.
+		$site_domain = $this->normalize_site_domain((string) ($this->request->post['payment_aneepay_site_domain'] ?? ''));
+
+		if ('' !== $site_domain && !$this->is_valid_site_domain($site_domain)) {
+			$this->error['site_domain'] = $this->language->get('error_site_domain');
+		}
+
+		$this->request->post['payment_aneepay_site_domain'] = $site_domain;
+
 		if ($this->error) {
 			$this->error['warning'] = $this->language->get('error_warning');
 			return false;
@@ -234,6 +244,39 @@ class ControllerExtensionPaymentAneePay extends Controller {
 	 */
 	protected function is_uuid($id) {
 		return (bool) preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', trim((string) $id));
+	}
+
+	/**
+	 * Reduce a configured Origin domain to a bare host.
+	 *
+	 * Accepts `shop.example.com`, `https://shop.example.com/` and
+	 * `shop.example.com:8443`; the API expects a host, not a URL.
+	 *
+	 * @param string $value Raw setting value.
+	 * @return string
+	 */
+	protected function normalize_site_domain($value) {
+		$value = strtolower(trim((string) $value));
+		$value = preg_replace('#^[a-z][a-z0-9+.\-]*://#', '', $value);
+		$value = preg_split('#[/?\#]#', $value);
+		$value = rtrim((string) $value[0], '.');
+		$value = preg_replace('#:[0-9]+$#', '', $value);
+
+		return (string) $value;
+	}
+
+	/**
+	 * Whether the value looks like a hostname or an IP address.
+	 *
+	 * @param string $host Normalised host.
+	 * @return bool
+	 */
+	protected function is_valid_site_domain($host) {
+		if (false !== filter_var($host, FILTER_VALIDATE_IP)) {
+			return true;
+		}
+
+		return (bool) preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/', $host);
 	}
 
 	/**

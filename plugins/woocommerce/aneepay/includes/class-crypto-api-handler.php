@@ -74,15 +74,34 @@ class AneePay_Crypto_API_Handler {
 	 * @return string
 	 */
 	public function get_origin() {
-		$configured = $this->gateway->get_option( 'site_domain' );
+		$configured = $this->normalize_host( (string) $this->gateway->get_option( 'site_domain' ) );
 
-		if ( ! empty( $configured ) ) {
+		if ( '' !== $configured ) {
 			return $configured;
 		}
 
 		$domain = wp_parse_url( home_url(), PHP_URL_HOST );
 
 		return (string) $domain;
+	}
+
+	/**
+	 * Reduce a configured Origin domain to a bare host.
+	 *
+	 * Accepts `shop.example.com`, `https://shop.example.com/` and
+	 * `shop.example.com:8443`; the API expects a host, not a URL.
+	 *
+	 * @param string $value Raw setting value.
+	 * @return string
+	 */
+	public function normalize_host( $value ) {
+		$value = strtolower( trim( (string) $value ) );
+		$value = preg_replace( '#^[a-z][a-z0-9+.\-]*://#', '', $value );
+		$parts = preg_split( '#[/?\#]#', $value );
+		$value = rtrim( (string) $parts[0], '.' );
+		$value = preg_replace( '#:[0-9]+$#', '', $value );
+
+		return (string) $value;
 	}
 
 	/**

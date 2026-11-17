@@ -126,7 +126,7 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 			'site_domain' => array(
 				'title'       => __( 'Domain', 'aneepay-crypto-gateway' ),
 				'type'        => 'text',
-				'description' => __( 'Your verified merchant domain. Sent in the Origin header. Leave empty to use your site host automatically.', 'aneepay-crypto-gateway' ),
+				'description' => __( 'Your verified merchant domain, sent in the Origin header. A bare host such as shop.example.com. Leave empty to use this site\'s domain (from the WordPress configuration).', 'aneepay-crypto-gateway' ),
 				'default'     => '',
 				'desc_tip'    => true,
 			),
