@@ -1,0 +1,92 @@
+# Changelog
+
+All notable changes to the AneePay CMS integrations — WooCommerce, OpenCart 3.x
+and PrestaShop 1.7/8 — are documented here. The three plugins share one version
+and are released together.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+> Releases before `1.3.0` were published without git tags. Their dates and scope
+> are reconstructed from the commit history, so grouping into versions is
+> approximate; the first tagged release is `v1.3.0-beta`.
+
+## [Unreleased]
+
+### Added
+
+- Nothing yet.
+
+## [1.2.0] - 2026-10-22
+
+Security and stability batch produced by the plugin audit.
+
+### Security
+
+- OpenCart/PrestaShop: TLS peer and host verification enabled in the cURL
+  clients (was silently disabled).
+- All plugins: status rollback, unknown statuses and stale webhook replay are
+  rejected instead of applied.
+- All plugins: IDOR/CSRF closed in the result, `check` and `cron` endpoints —
+  order data is only readable with a signed/authorised reference.
+- OpenCart: the stored webhook secret survives re-saving the settings form with
+  an empty secret field.
+
+### Fixed
+
+- OpenCart/PrestaShop: stock is restored exactly once on `failed`/`cancelled`,
+  including repeated webhooks and manual status changes.
+- PrestaShop: the order is created before the payment request and compensated if
+  the gateway call fails, instead of losing the cart contents.
+- PrestaShop: the `Origin` header falls back to the canonical shop host instead
+  of trusting the incoming `Host`.
+- OpenCart/PrestaShop: the FX rate cache expires after 1 hour, so a stale rate
+  can no longer be used indefinitely.
+- Stock, cron and PrestaShop host regressions introduced by the first fixes.
+
+### Changed
+
+- WooCommerce: plugin version synced with `VERSION`; PrestaShop `config.xml` is
+  generated at build time instead of being committed.
+- All plugins: uninstalling keeps tables and settings by default; deleting data
+  is an explicit opt-in.
+
+## [1.1.0] - 2026-09-21
+
+### Added
+
+- PrestaShop: admin extras — connection test, conversion preview, request log
+  and a sandbox/live badge.
+- PrestaShop: pending-payment screen, fiat-to-token conversion shown on
+  checkout, and a confirmation step before leaving to the AneePay checkout.
+
+### Fixed
+
+- PrestaShop: module installation and the docker stand work end to end
+  (hooks, tables, front controllers).
+- OpenCart: catalog model class renamed to match the OpenCart loader name.
+
+## [1.0.0] - 2026-09-06
+
+First release of the plugins.
+
+### Added
+
+- WooCommerce gateway: hosted checkout redirect, HMAC-SHA256 webhook
+  verification, fiat → USD → token conversion (ECB/Frankfurter, store currency
+  rate, manual rate) with ceil rounding in the merchant's favour.
+- WooCommerce: idempotent payment creation and duplicate-payment prevention,
+  configurable status sync with cron overlap protection, result pages with order
+  context, spinner and "I already paid" action.
+- WooCommerce admin: grouped settings with account UUID validation, quick setup,
+  connection test and request log.
+- OpenCart 3.x extension and PrestaShop 1.7/8 module with the same payment flow,
+  status mapping and admin settings.
+- Monorepo split into per-platform folders with `scripts/pack.sh` artifacts and
+  a docker test shop per platform.
+- English READMEs and the `TECHDEBT.md` plan for a shared platform-agnostic core.
+
+### Fixed
+
+- Stock restored on failed/cancelled orders.
+- WooCommerce gateway class loaded on `plugins_loaded`; activation sync fixed.
