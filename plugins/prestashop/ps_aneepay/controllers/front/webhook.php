@@ -32,6 +32,14 @@ class Ps_AneepayWebhookModuleFrontController extends ModuleFrontController {
 			$this->respond(400, array('success' => false));
 		}
 
+		// `timestamp` is informational (authorisation is the signature alone),
+		// so only its presence and type are validated: the schema requires a
+		// non-negative number for v1 payloads, while legacy payloads without
+		// `version`/`event_id` may omit it.
+		if (!$this->timestamp_is_valid($params)) {
+			$this->respond(400, array('success' => false, 'error' => 'invalid_timestamp'));
+		}
+
 		$orders  = new AneePayOrder();
 		$webhook = new AneePayWebhook($api, $orders, $module->getStateMap());
 		$id_order = $webhook->resolveOrderId($params);
@@ -42,11 +50,35 @@ class Ps_AneepayWebhookModuleFrontController extends ModuleFrontController {
 			$this->respond(404, array('success' => false));
 		}
 
-		$id_order  = (int) $id_order;
-		$key       = AneePayEventLog::dedupKey($params, $body);
+		$id_order = (int) $id_order;
+		$mapping  = $orders->getByOrder($id_order);
+		$key      = AneePayEventLog::dedupKey($params, $body);
 		$order_ref = !empty($params['payment_id']) && is_scalar($params['payment_id'])
 			? (string) $params['payment_id']
 			: '#' . $id_order;
+
+		// A sandbox payment must never close a live order (and vice versa).
+		$payload_sandbox = AneePayEventLog::payloadIsSandbox($params);
+
+		if (null !== $payload_sandbox) {
+			$order_sandbox = $mapping ? (bool) (int) $mapping['sandbox'] : null;
+
+			if (null !== $order_sandbox && $order_sandbox !== $payload_sandbox) {
+				AneePayEventLog::claim($key, $params, $order_ref, 'ignored_sandbox');
+				$api->write_log(
+					'webhook',
+					'Sandbox mismatch for order #' . $id_order . ': payload sandbox=' . ($payload_sandbox ? 'yes' : 'no')
+						. ', order sandbox=' . ($order_sandbox ? 'yes' : 'no') . '. Status not applied.',
+					'error'
+				);
+
+				$this->respond(200, array(
+					'success' => false,
+					'ignored' => 'sandbox_mismatch',
+					'status'  => $status,
+				));
+			}
+		}
 
 		// At-least-once delivery: the first claim wins, retries are no-ops.
 		if (!AneePayEventLog::claim($key, $params, $order_ref)) {
@@ -68,6 +100,26 @@ class Ps_AneepayWebhookModuleFrontController extends ModuleFrontController {
 		}
 
 		$this->respond(200, array('success' => true, 'status' => $status));
+	}
+
+	/**
+	 * Whether the payload timestamp satisfies the v1 schema.
+	 *
+	 * @param array $params Webhook payload.
+	 * @return bool
+	 */
+	protected function timestamp_is_valid($params) {
+		if (!array_key_exists('timestamp', $params)) {
+			return !isset($params['version']) && empty($params['event_id']);
+		}
+
+		$ts = $params['timestamp'];
+
+		if (is_bool($ts) || !is_numeric($ts)) {
+			return false;
+		}
+
+		return (float) $ts >= 0;
 	}
 
 	/**

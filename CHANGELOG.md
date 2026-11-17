@@ -24,11 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sha256(body)` for legacy payloads). A retry is acknowledged with HTTP 200
   and applies nothing, events are pruned after 7 days, and a claim is released
   when applying the status fails so the vendor retry is not swallowed.
+- Sandbox guard: a payment from Amoy cannot complete a live order (and a live
+  payment cannot complete a sandbox order). The mismatched event is recorded as
+  ignored, logged at error level and acknowledged with HTTP 200.
 
 ### Changed
 
 - CI: a required `verify` job (tag must equal `VERSION`, version sources, lint)
   now gates both `pack` and `release`; the release publishes `SHA256SUMS`.
+- Webhook `timestamp` is validated for presence and type only — the 24-hour
+  freshness window was removed, since authorisation rests on the signature and
+  replays are stopped by the event log.
 
 ## [1.2.0] - 2026-10-22
 

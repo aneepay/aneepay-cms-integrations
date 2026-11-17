@@ -267,6 +267,12 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			return;
 		}
 
+		if (!$this->timestamp_is_valid($params)) {
+			$this->response->addHeader('HTTP/1.1 400 Bad Request');
+			$this->response->setOutput('{"success":false,"error":"invalid_timestamp"}');
+			return;
+		}
+
 		$this->load->model('extension/payment/aneepay');
 		$this->load->model('checkout/order');
 
@@ -281,8 +287,28 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			return;
 		}
 
-		$events    = new AneePay_Event_Log($this->db);
+		$mapping = $this->model_extension_payment_aneepay->getByOrderId($order_id);
+		$events  = new AneePay_Event_Log($this->db);
 		$event_key = $events->dedup_key($params, $body);
+
+		// A sandbox payment must never complete a live order (and vice versa).
+		$payload_sandbox = AneePay_Event_Log::payload_is_sandbox($params);
+		$order_sandbox   = $mapping ? (bool) (int) $mapping['sandbox'] : null;
+
+		if (null !== $payload_sandbox && null !== $order_sandbox && $payload_sandbox !== $order_sandbox) {
+			$events->claim($event_key, $params, (string) $order_id, 'ignored_sandbox');
+			$client->write_log('webhook', sprintf(
+				'Ignored "%1$s" event for order %2$d: the payment environment (%3$s) does not match the order (%4$s).',
+				$status,
+				$order_id,
+				$payload_sandbox ? 'sandbox' : 'live',
+				$order_sandbox ? 'sandbox' : 'live'
+			), 'error');
+
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput('{"success":false,"ignored":"sandbox_mismatch"}');
+			return;
+		}
 
 		if (!$events->claim($event_key, $params, (string) $order_id, 'applied')) {
 			// At-least-once delivery: the same event was already applied.
@@ -305,6 +331,33 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 		$this->response->addHeader('Content-Type: application/json');
 		$this->response->setOutput(json_encode(array('success' => true, 'status' => $status)));
+	}
+
+	/**
+	 * Validate the `timestamp` field of a webhook payload.
+	 *
+	 * The v1 contract makes `timestamp` mandatory and numeric, but it is
+	 * informational: freshness is not what authenticates a webhook (the HMAC
+	 * signature is), and replays are rejected by event deduplication. There is
+	 * therefore no staleness window — only a type check.
+	 *
+	 * @param array $params Decoded webhook payload.
+	 * @return bool
+	 */
+	protected function timestamp_is_valid($params) {
+		$is_v1 = isset($params['version']) || isset($params['event_id']);
+
+		if (!array_key_exists('timestamp', $params)) {
+			return !$is_v1;
+		}
+
+		$timestamp = $params['timestamp'];
+
+		if (is_bool($timestamp) || !is_numeric($timestamp)) {
+			return false;
+		}
+
+		return (float) $timestamp >= 0;
 	}
 
 	/**

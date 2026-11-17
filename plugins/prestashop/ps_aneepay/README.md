@@ -13,7 +13,7 @@ ps_aneepay/
     AneePayUsdConverter.php           (fiat -> USD -> token)
     AneePayOrder.php                  (ps_aneepay_order mapping)
     AneePayWebhook.php                (resolve order + apply OrderHistory)
-    AneePayEventLog.php               (webhook dedup by event_id)
+    AneePayEventLog.php               (webhook dedup by event_id + is_sandbox guard)
   controllers/front/
     payment.php    (validateOrder + redirect to checkout_url)
     webhook.php    (STATUS_URL — HMAC verify, fail-closed)
@@ -46,7 +46,8 @@ ps_aneepay/
   the order by `payment_id` / `operation_id` (128-bit int, kept exact) or `#N`.
 - Webhook deliveries are deduplicated in the `ps_aneepay_event` table by
   `event_id` (or `sha256(body)` for legacy payloads): a retry gets HTTP 200 and
-  changes nothing, rows are pruned after 7 days.
+  changes nothing, rows are pruned after 7 days, and a sandbox payment never
+  completes a live order.
 - PrestaShop has no built-in cron: add the cron URL above to your server crontab.
 - Uninstall keeps the `ps_aneepay_order` / `ps_aneepay_log` tables by default;
   disable "Keep data on uninstall" in the settings to drop them.

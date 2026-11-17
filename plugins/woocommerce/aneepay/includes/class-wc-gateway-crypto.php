@@ -929,6 +929,54 @@ function aneepay_verify_webhook_signature( $signature, $body, $secret ) {
 }
 
 /**
+ * Validate the `timestamp` field of a webhook payload.
+ *
+ * The v1 contract makes `timestamp` mandatory and numeric, but it is
+ * informational: freshness is not what authenticates a webhook (the HMAC
+ * signature is), and replays are rejected by event deduplication. There is
+ * therefore no staleness window — only a type check. Payloads from the legacy
+ * dApp confirm endpoint predate the contract and may omit the field.
+ *
+ * @param array $params Decoded webhook payload.
+ * @return bool
+ */
+function aneepay_webhook_timestamp_is_valid( $params ) {
+	$is_v1 = isset( $params['version'] ) || isset( $params['event_id'] );
+
+	if ( ! array_key_exists( 'timestamp', $params ) ) {
+		return ! $is_v1;
+	}
+
+	$timestamp = $params['timestamp'];
+
+	if ( is_bool( $timestamp ) || ! is_numeric( $timestamp ) ) {
+		return false;
+	}
+
+	return (float) $timestamp >= 0;
+}
+
+/**
+ * Whether an order was created while the gateway was in test mode.
+ *
+ * @param WC_Order $order Order object.
+ * @return bool|null Null when the order predates the sandbox marker.
+ */
+function aneepay_order_is_sandbox( $order ) {
+	$flag = (string) $order->get_meta( '_aneepay_sandbox', true );
+
+	if ( 'yes' === $flag ) {
+		return true;
+	}
+
+	if ( 'no' === $flag ) {
+		return false;
+	}
+
+	return null;
+}
+
+/**
  * Handle an incoming status notification.
  *
  * AneePay pushes this payload to the configured STATUS_URL after a payment
@@ -938,7 +986,8 @@ function aneepay_verify_webhook_signature( $signature, $body, $secret ) {
  *   "event_id": "8b5f8f2e-...",                            // stable across retries
  *   "operation_id": 1025366559013960798969014288963858567168, // int(payment_id)
  *   "status": "success",
- *   "timestamp": 1755262800.0
+ *   "timestamp": 1755262800.0,
+ *   "is_sandbox": false
  * }
  *
  * The signature (X-AneePay-Signature) is an HMAC-SHA256 hex digest of the
@@ -977,6 +1026,16 @@ function aneepay_handle_webhook( $request ) {
 		return new WP_REST_Response( array( 'success' => false ), 400 );
 	}
 
+	if ( ! aneepay_webhook_timestamp_is_valid( $params ) ) {
+		return new WP_REST_Response(
+			array(
+				'success' => false,
+				'error'   => 'invalid_timestamp',
+			),
+			400
+		);
+	}
+
 	$order = aneepay_resolve_order( $params );
 
 	if ( ! $order ) {
@@ -987,6 +1046,27 @@ function aneepay_handle_webhook( $request ) {
 
 	$event_key = AneePay_Crypto_Event_Log::dedup_key( $params, $body );
 	$order_ref = (string) $order->get_id();
+
+	// A sandbox payment must never complete a live order (and vice versa).
+	$payload_sandbox = AneePay_Crypto_Event_Log::payload_is_sandbox( $params );
+	$order_sandbox   = aneepay_order_is_sandbox( $order );
+
+	if ( null !== $payload_sandbox && null !== $order_sandbox && $payload_sandbox !== $order_sandbox ) {
+		AneePay_Crypto_Event_Log::claim( $event_key, $params, $order_ref, 'ignored_sandbox' );
+		$gateway->api_handler->log(
+			'webhook',
+			sprintf( 'Ignored "%1$s" event for order %2$s: the payment environment (%3$s) does not match the order (%4$s).', $status, $order_ref, $payload_sandbox ? 'sandbox' : 'live', $order_sandbox ? 'sandbox' : 'live' ),
+			'error'
+		);
+
+		return new WP_REST_Response(
+			array(
+				'success' => false,
+				'ignored' => 'sandbox_mismatch',
+			),
+			200
+		);
+	}
 
 	if ( ! AneePay_Crypto_Event_Log::claim( $event_key, $params, $order_ref, 'applied' ) ) {
 		return new WP_REST_Response(
