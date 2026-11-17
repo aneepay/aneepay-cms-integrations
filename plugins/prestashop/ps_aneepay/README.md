@@ -75,6 +75,10 @@ ps_aneepay/
   is cancelled — or failed when no cancelled state is configured — once the API
   confirms the payment did not go through.
 - PrestaShop has no built-in cron: add the cron URL above to your server crontab.
+- **Sync a payment** on the configuration page takes an AneePay payment ID (order
+  ID optional), fetches that payment from the API and applies its status right
+  away — the manual fix for "the buyer paid but the order is still pending",
+  since webhooks only ever deliver `success` and there is no replay endpoint.
 - Uninstall keeps the `ps_aneepay_order` / `ps_aneepay_log` tables by default;
   disable "Keep data on uninstall" in the settings to drop them.
 - Upgrading from 1.1.x runs `upgrade/upgrade-1.2.0.php`, which adds the

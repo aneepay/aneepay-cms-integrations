@@ -457,6 +457,7 @@ class Ps_Aneepay extends PaymentModule {
 
 		$is_submit = Tools::isSubmit('submitAneepay')
 			|| Tools::isSubmit('submitAneepayTest')
+			|| Tools::isSubmit('submitAneepaySync')
 			|| Tools::isSubmit('submitAneepayClearLog')
 			|| Tools::isSubmit('submitAneepayRefreshLog');
 		$token_valid = !$is_submit
@@ -468,6 +469,8 @@ class Ps_Aneepay extends PaymentModule {
 			$output .= $this->postProcess();
 		} elseif (Tools::isSubmit('submitAneepayTest')) {
 			$output .= $this->renderTestConnectionResult();
+		} elseif (Tools::isSubmit('submitAneepaySync')) {
+			$output .= $this->renderSyncPaymentResult();
 		} elseif (Tools::isSubmit('submitAneepayClearLog')) {
 			$this->getApi()->clear_request_log();
 			$output .= $this->displayConfirmation($this->l('Request log cleared.'));
@@ -488,6 +491,7 @@ class Ps_Aneepay extends PaymentModule {
 
 		$html .= $this->renderNotices($account_id, $secret);
 		$html .= $this->renderTestConnectionForm();
+		$html .= $this->renderSyncPaymentForm();
 		$html .= $this->renderConversionExample();
 		$html .= $this->renderRequestLog();
 		$html .= $this->renderForm();
@@ -575,6 +579,85 @@ class Ps_Aneepay extends PaymentModule {
 		$html .= '</div></div>';
 
 		return $html;
+	}
+
+	/**
+	 * Form: pull one payment from the API and apply its status now.
+	 *
+	 * Webhooks deliver only `success` and there is no replay endpoint, so a
+	 * missed delivery leaves a paid order pending until someone asks the API.
+	 *
+	 * @return string
+	 */
+	protected function renderSyncPaymentForm() {
+		$html  = '<div class="panel"><div class="panel-heading"><i class="icon-refresh"></i> ' . $this->l('Sync a payment') . '</div><div class="panel-body">';
+		$html .= '<form method="post" action="">';
+		$html .= '<input type="hidden" name="token" value="' . Tools::safeOutput(Tools::getAdminTokenLite('AdminModules')) . '">';
+		$html .= '<div class="form-group">';
+		$html .= '<label class="control-label">' . $this->l('AneePay payment ID') . '</label>';
+		$html .= '<input type="text" name="aneepay_sync_payment_id" value="" class="form-control" style="max-width:420px;">';
+		$html .= '<p class="help-block">' . $this->l('Fetches the payment from AneePay right now and applies its status to the order. Use it when the buyer says they paid but the order is still pending.') . '</p>';
+		$html .= '</div>';
+		$html .= '<div class="form-group">';
+		$html .= '<label class="control-label">' . $this->l('Order ID (optional)') . '</label>';
+		$html .= '<input type="number" min="0" name="aneepay_sync_order_id" value="" class="form-control" style="max-width:160px;">';
+		$html .= '</div>';
+		$html .= '<button type="submit" name="submitAneepaySync" value="1" class="btn btn-default"><i class="icon-refresh"></i> ' . $this->l('Sync') . '</button>';
+		$html .= '</form>';
+		$html .= '</div></div>';
+
+		return $html;
+	}
+
+	/**
+	 * Handle the "Sync a payment" form.
+	 *
+	 * @return string
+	 */
+	protected function renderSyncPaymentResult() {
+		$payment_id = trim((string) Tools::getValue('aneepay_sync_payment_id'));
+		$id_order   = (int) Tools::getValue('aneepay_sync_order_id');
+
+		if ('' === $payment_id) {
+			return $this->displayError($this->l('Enter the AneePay payment ID.'));
+		}
+
+		$api  = $this->getApi();
+		$data = $api->get_payment($payment_id);
+
+		if (!is_array($data) || empty($data['status'])) {
+			return $this->displayError(sprintf(
+				$this->l('AneePay did not return a payment for %1$s (HTTP %2$d).'),
+				$payment_id,
+				$api->lastHttpCode()
+			));
+		}
+
+		$orders = new AneePayOrder();
+
+		if ($id_order <= 0) {
+			$mapping = $orders->getByPaymentId($payment_id);
+
+			if ($mapping) {
+				$id_order = (int) $mapping['id_order'];
+			}
+		}
+
+		if ($id_order <= 0) {
+			return $this->displayError(sprintf(
+				$this->l('No AneePay order matches payment %s. Open the order and copy its payment ID, or pass the order ID as well.'),
+				$payment_id
+			));
+		}
+
+		$webhook = new AneePayWebhook($api, $orders, $this->getStateMap());
+		$webhook->apply($id_order, (string) $data['status']);
+
+		return $this->displayConfirmation(sprintf(
+			$this->l('Order #%1$d synced: AneePay reports "%2$s".'),
+			$id_order,
+			(string) $data['status']
+		));
 	}
 
 	protected function renderTestConnectionResult() {

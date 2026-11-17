@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A manual **Sync** tool on every settings page: paste an AneePay payment ID
+  (order ID optional) and the plugin fetches that payment from the API and
+  applies its status immediately. This is the escape hatch for "the buyer paid,
+  the order is still pending", because webhooks only ever deliver `success` and
+  there is no replay endpoint.
 - `./scripts/pack.sh check` — verifies the single version source and lints all
   plugins without packaging anything.
 - `dist/SHA256SUMS` with the checksums of the built artifacts; artifacts of

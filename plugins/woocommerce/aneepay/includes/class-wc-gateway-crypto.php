@@ -401,6 +401,8 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 
 		$this->render_test_connection( $account_id );
 
+		$this->render_sync_payment();
+
 		$this->render_conversion_example();
 
 		$this->render_request_log();
@@ -504,6 +506,66 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 					.catch(function (e) {
 						btn.disabled = false;
 						out.textContent = 'Connection failed';
+						out.style.color = 'red';
+					});
+			});
+		})();
+		</script>
+		<?php
+	}
+
+	/**
+	 * Print the manual "sync one payment" helper.
+	 *
+	 * Webhooks deliver only `success` and there is no replay endpoint, so a
+	 * missed delivery leaves a paid order pending until someone asks the API.
+	 *
+	 * @return void
+	 */
+	protected function render_sync_payment() {
+		$nonce = wp_create_nonce( 'aneepay_sync_payment' );
+
+		echo '<div class="aneepay-sync-payment">';
+		echo '<h3>' . esc_html__( 'Sync a payment', 'aneepay-crypto-gateway' ) . '</h3>';
+		echo '<p class="description">' . esc_html__( 'Fetches the payment from AneePay right now and applies its status to the order. Use it when the buyer says they paid but the order is still pending. The order ID is optional when the payment ID is stored on the order.', 'aneepay-crypto-gateway' ) . '</p>';
+		echo '<p><input type="text" id="aneepay-sync-payment-id" class="regular-text" placeholder="' . esc_attr__( 'AneePay payment ID', 'aneepay-crypto-gateway' ) . '"> ';
+		echo '<input type="number" id="aneepay-sync-order-id" class="small-text" min="0" placeholder="' . esc_attr__( 'Order ID (optional)', 'aneepay-crypto-gateway' ) . '"> ';
+		echo '<button type="button" id="aneepay-sync-payment" class="button" data-nonce="' . esc_attr( $nonce ) . '">' . esc_html__( 'Sync', 'aneepay-crypto-gateway' ) . '</button>';
+		echo ' <span id="aneepay-sync-result" style="margin-left:8px;"></span></p>';
+		echo '</div>';
+		?>
+		<script type="text/javascript">
+		(function () {
+			'use strict';
+			var btn = document.getElementById('aneepay-sync-payment');
+			var out = document.getElementById('aneepay-sync-result');
+			var pid = document.getElementById('aneepay-sync-payment-id');
+			var oid = document.getElementById('aneepay-sync-order-id');
+			if (!btn) { return; }
+			btn.addEventListener('click', function () {
+				btn.disabled = true;
+				out.style.color = '';
+				out.textContent = '<?php echo esc_js( __( 'Syncing...', 'aneepay-crypto-gateway' ) ); ?>';
+				var body = new URLSearchParams();
+				body.append('action', 'aneepay_sync_payment');
+				body.append('nonce', btn.getAttribute('data-nonce'));
+				body.append('payment_id', pid ? pid.value : '');
+				body.append('order_id', oid ? oid.value : '');
+				fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: body })
+					.then(function (r) { return r.json(); })
+					.then(function (d) {
+						btn.disabled = false;
+						if (d && d.success) {
+							out.textContent = (d.data && d.data.message) || 'OK';
+							out.style.color = 'green';
+						} else {
+							out.textContent = (d && d.data && d.data.message) || '<?php echo esc_js( __( 'Sync failed.', 'aneepay-crypto-gateway' ) ); ?>';
+							out.style.color = 'red';
+						}
+					})
+					.catch(function () {
+						btn.disabled = false;
+						out.textContent = '<?php echo esc_js( __( 'Sync failed.', 'aneepay-crypto-gateway' ) ); ?>';
 						out.style.color = 'red';
 					});
 			});

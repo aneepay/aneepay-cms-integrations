@@ -66,6 +66,10 @@ install.xml                                            # ocmod manifest (add-on 
   OpenCart statuses (1/2/10/7); saving rejects an empty or duplicated status, so
   a failed or cancelled payment always leaves an order history entry.
 - Cron is not built into OpenCart: add the cron URL above to your server crontab.
+- **Sync a Payment** on the settings page takes an AneePay payment ID (order ID
+  optional), fetches that payment from the API and applies its status right away —
+  the manual fix for "the buyer paid but the order is still pending", since
+  webhooks only ever deliver `success` and there is no replay endpoint.
 - Uninstall keeps the `aneepay_order` / `aneepay_log` tables by default; set
   "On uninstall" to "Delete data" in the settings to drop them.
 - The admin page upgrades an existing `aneepay_order` table in place (adds

@@ -195,6 +195,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$data['action']     = $this->url->link('extension/payment/aneepay', 'user_token=' . $this->session->data['user_token'], true);
 		$data['cancel']     = $this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'] . '&type=payment', true);
 		$data['test_url']   = $this->url->link('extension/payment/aneepay/test_connection', 'user_token=' . $this->session->data['user_token'], true);
+		$data['sync_url']   = $this->url->link('extension/payment/aneepay/sync_payment', 'user_token=' . $this->session->data['user_token'], true);
 		$data['logs_url']   = $this->url->link('extension/payment/aneepay/get_logs', 'user_token=' . $this->session->data['user_token'], true);
 		$data['clear_url']  = $this->url->link('extension/payment/aneepay/clear_logs', 'user_token=' . $this->session->data['user_token'], true);
 
@@ -423,6 +424,76 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$result = $this->admin_client()->test_connection();
 
 		$this->response->setOutput(json_encode($result));
+	}
+
+	/**
+	 * AJAX: fetch one payment from the API and apply its status now.
+	 *
+	 * Webhooks only ever deliver `success` and there is no replay endpoint, so
+	 * this is the manual path for "the buyer paid, the order is still pending".
+	 */
+	public function sync_payment() {
+		$this->load->language('extension/payment/aneepay');
+		$this->load->model('extension/payment/aneepay');
+		$this->load_lib();
+
+		$this->response->addHeader('Content-Type: application/json');
+
+		if (!$this->authorised()) {
+			$this->response->setOutput(json_encode(array('ok' => false, 'message' => $this->language->get('error_permission'))));
+			return;
+		}
+
+		$payment_id = isset($this->request->post['payment_id']) ? trim((string) $this->request->post['payment_id']) : '';
+		$order_id   = isset($this->request->post['order_id']) ? (int) $this->request->post['order_id'] : 0;
+
+		if ('' === $payment_id) {
+			$this->response->setOutput(json_encode(array('ok' => false, 'message' => $this->language->get('error_sync_payment_id'))));
+			return;
+		}
+
+		$client = $this->admin_client();
+		$data   = $client->get_payment($payment_id);
+
+		if (!is_array($data) || empty($data['status'])) {
+			$this->response->setOutput(json_encode(array(
+				'ok'      => false,
+				'message' => sprintf($this->language->get('error_sync_not_found'), $payment_id, $client->last_http_code()),
+			)));
+			return;
+		}
+
+		if ($order_id <= 0) {
+			$mapping = $this->model_extension_payment_aneepay->getByPaymentId($payment_id);
+
+			if ($mapping) {
+				$order_id = (int) $mapping['order_id'];
+			}
+		}
+
+		if ($order_id <= 0) {
+			$this->response->setOutput(json_encode(array(
+				'ok'      => false,
+				'message' => sprintf($this->language->get('error_sync_no_order'), $payment_id),
+			)));
+			return;
+		}
+
+		$status_map = array(
+			'pending'   => (int) $this->config->get('payment_aneepay_pending_status_id'),
+			'success'   => (int) $this->config->get('payment_aneepay_paid_status_id'),
+			'failed'    => (int) $this->config->get('payment_aneepay_failed_status_id'),
+			'cancelled' => (int) $this->config->get('payment_aneepay_cancelled_status_id'),
+		);
+
+		$webhook = new AneePay_Webhook($this->registry, $client, $status_map);
+		$webhook->apply($order_id, (string) $data['status']);
+
+		$this->response->setOutput(json_encode(array(
+			'ok'      => true,
+			'status'  => (string) $data['status'],
+			'message' => sprintf($this->language->get('text_sync_ok'), $order_id, (string) $data['status']),
+		)));
 	}
 
 	/**

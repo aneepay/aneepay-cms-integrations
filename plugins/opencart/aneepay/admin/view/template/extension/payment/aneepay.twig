@@ -138,6 +138,31 @@
       </div>
 
       <div class="panel panel-default">
+        <div class="panel-heading"><h3 class="panel-title">{{ text_sync_payment }}</h3></div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label class="col-sm-2 control-label" for="input-sync-payment-id">{{ entry_sync_payment_id }}</label>
+            <div class="col-sm-10">
+              <input type="text" id="input-sync-payment-id" class="form-control" placeholder="{{ entry_sync_payment_id }}" />
+              <div class="help-block">{{ help_sync_payment }}</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="col-sm-2 control-label" for="input-sync-order-id">{{ entry_sync_order_id }}</label>
+            <div class="col-sm-10">
+              <input type="number" min="0" id="input-sync-order-id" class="form-control" placeholder="{{ entry_sync_order_id }}" />
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="col-sm-10 col-sm-offset-2">
+              <button type="button" id="aneepay-sync-payment" class="btn btn-default" data-url="{{ sync_url }}">{{ button_sync }}</button>
+              <span id="aneepay-sync-result"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel panel-default">
         <div class="panel-heading"><h3 class="panel-title">{{ text_coin }}</h3></div>
         <div class="panel-body">
           <div class="form-group">
@@ -349,6 +374,39 @@
 				out.textContent = '{{ text_failed }}';
 				out.style.color = 'red';
 			});
+		});
+	}
+
+	// Sync one payment by ID
+	var syncBtn = document.getElementById('aneepay-sync-payment');
+	var syncOut = document.getElementById('aneepay-sync-result');
+	var syncPid = document.getElementById('input-sync-payment-id');
+	var syncOid = document.getElementById('input-sync-order-id');
+	if (syncBtn) {
+		syncBtn.addEventListener('click', function () {
+			syncBtn.disabled = true;
+			syncOut.style.color = '';
+			syncOut.textContent = '{{ text_syncing }}';
+			var body = new URLSearchParams();
+			body.append('payment_id', syncPid ? syncPid.value : '');
+			body.append('order_id', syncOid ? syncOid.value : '');
+			fetch(syncBtn.getAttribute('data-url'), { method: 'POST', credentials: 'same-origin', body: body })
+				.then(function (r) { return r.json(); })
+				.then(function (d) {
+					syncBtn.disabled = false;
+					if (d && d.ok) {
+						syncOut.textContent = d.message || '';
+						syncOut.style.color = 'green';
+					} else {
+						syncOut.textContent = (d && d.message) || '{{ text_sync_failed }}';
+						syncOut.style.color = 'red';
+					}
+				})
+				.catch(function () {
+					syncBtn.disabled = false;
+					syncOut.textContent = '{{ text_sync_failed }}';
+					syncOut.style.color = 'red';
+				});
 		});
 	}
 

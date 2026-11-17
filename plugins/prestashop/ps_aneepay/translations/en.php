@@ -18,3 +18,14 @@ $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_824a78908ffc3f48cefba98aaf88402f'] 
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_ef68e4e640e7e5c2f71365650ae6411e'] = 'Auto uses the live Frankfurter (ECB) rate and falls back to the store rate, then the manual rate.';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_c46d36c0a4f775e0e533c7a54ef202c6'] = 'The store currency (%s) has no ECB reference rate, so the manual rate is used.';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_1442793f42748de154500f45e223c964'] = 'The store currency (%s) has no ECB reference rate, so the store currency rate is used. Keep the store rates up to date.';
+
+// Sync a payment (manual status pull)
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_046ab71aac1d7dca6b9c23c1a8dab5a9'] = 'Sync a payment';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_bdf7f31781e584520f87d976694eb804'] = 'AneePay payment ID';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_e900b0919eba4068fa4c576a937a31e5'] = 'Fetches the payment from AneePay right now and applies its status to the order. Use it when the buyer says they paid but the order is still pending.';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_b781034b1393202bff8da13c4a2e0f81'] = 'Order ID (optional)';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_d8e87c0927539672f54462c837be0b7f'] = 'Sync';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_dfb86153432a640cd09a041f82a6ba7a'] = 'Enter the AneePay payment ID.';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_ad3800ab89176e4bba707fe3266d4910'] = 'AneePay did not return a payment for %1$s (HTTP %2$d).';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_052e20e50347d3c397f3ee46b50b05d0'] = 'No AneePay order matches payment %s. Open the order and copy its payment ID, or pass the order ID as well.';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_07d18ef3b8890e8550b37380653a1129'] = 'Order #%1$d synced: AneePay reports "%2$s".';

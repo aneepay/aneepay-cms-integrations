@@ -271,11 +271,76 @@ function aneepay_register_endpoints() {
 	// Admin-only: test the AneePay connection from the gateway settings page.
 	add_action( 'wp_ajax_aneepay_check_connection', 'aneepay_ajax_check_connection' );
 
+	// Admin-only: pull the current status of one payment from the API right now.
+	add_action( 'wp_ajax_aneepay_sync_payment', 'aneepay_ajax_sync_payment' );
+
 	// Admin-only: in-app request log panel.
 	add_action( 'wp_ajax_aneepay_get_logs', 'aneepay_ajax_get_logs' );
 	add_action( 'wp_ajax_aneepay_clear_logs', 'aneepay_ajax_clear_logs' );
 }
 add_action( 'rest_api_init', 'aneepay_register_endpoints' );
+
+/**
+ * Admin AJAX: pull the current status of one payment from the API and apply it.
+ *
+ * Webhooks only ever deliver `success`, and a missed delivery has no replay
+ * endpoint, so this is the manual escape hatch for "the money left, the order
+ * is still pending".
+ *
+ * @return void
+ */
+function aneepay_ajax_sync_payment() {
+	check_ajax_referer( 'aneepay_sync_payment', 'nonce' );
+
+	if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'aneepay-crypto-gateway' ) ) );
+	}
+
+	$payment_id = isset( $_POST['payment_id'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_id'] ) ) : '';
+	$order_id   = isset( $_POST['order_id'] ) ? absint( $_POST['order_id'] ) : 0;
+
+	if ( '' === $payment_id ) {
+		wp_send_json_error( array( 'message' => __( 'Enter the AneePay payment ID.', 'aneepay-crypto-gateway' ) ) );
+	}
+
+	$gateway = new WC_Gateway_AneePay_Crypto();
+	$data    = $gateway->api_handler->get_payment( $payment_id );
+
+	if ( ! is_array( $data ) || empty( $data['status'] ) ) {
+		wp_send_json_error(
+			array(
+				/* translators: 1: payment ID, 2: HTTP status code. */
+				'message' => sprintf( __( 'AneePay did not return a payment for %1$s (HTTP %2$d).', 'aneepay-crypto-gateway' ), $payment_id, $gateway->api_handler->last_http_code() ),
+			)
+		);
+	}
+
+	$order = aneepay_resolve_order(
+		array(
+			'order_id'   => $order_id,
+			'payment_id' => $payment_id,
+		)
+	);
+
+	if ( ! $order ) {
+		wp_send_json_error(
+			array(
+				/* translators: %s: payment ID. */
+				'message' => sprintf( __( 'No AneePay order matches payment %s. Open the order and copy its payment ID, or pass the order ID as well.', 'aneepay-crypto-gateway' ), $payment_id ),
+			)
+		);
+	}
+
+	$status = sanitize_key( $data['status'] );
+	aneepay_apply_payment_status( $order, $status );
+
+	wp_send_json_success(
+		array(
+			/* translators: 1: order ID, 2: AneePay payment status. */
+			'message' => sprintf( __( 'Order #%1$d synced: AneePay reports "%2$s".', 'aneepay-crypto-gateway' ), $order->get_id(), $status ),
+		)
+	);
+}
 
 /**
  * Admin AJAX: return the in-app request log.

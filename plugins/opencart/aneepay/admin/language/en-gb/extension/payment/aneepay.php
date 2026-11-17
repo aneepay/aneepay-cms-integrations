@@ -78,6 +78,20 @@ $_['error_warning']          = 'Warning: Please check the form carefully for err
 // Buttons / misc
 $_['button_test']        = 'Test connection';
 $_['button_logs']        = 'Request log';
+$_['button_sync']        = 'Sync';
+
+// Sync one payment by ID
+$_['text_sync_payment']       = 'Sync a Payment';
+$_['entry_sync_payment_id']   = 'AneePay Payment ID';
+$_['entry_sync_order_id']     = 'Order ID (optional)';
+$_['text_syncing']            = 'Syncing…';
+$_['text_sync_failed']        = 'Sync failed';
+$_['text_sync_ok']            = 'Order #%1$d synced: AneePay reports "%2$s".';
+$_['error_sync_payment_id']   = 'Enter the AneePay payment ID.';
+$_['error_sync_not_found']    = 'AneePay did not return a payment for %1$s (HTTP %2$d).';
+$_['error_sync_no_order']     = 'No AneePay order matches payment %s. Open the order and copy its payment ID, or pass the order ID as well.';
+$_['help_sync_payment']       = 'Fetches the payment from AneePay right now and applies its status to the order. Use it when the buyer says they paid but the order is still pending.';
+
 $_['button_clear']       = 'Clear';
 $_['text_checking']      = 'Checking…';
 $_['text_connected']     = 'Connection OK. Account exists and the domain matches.';
