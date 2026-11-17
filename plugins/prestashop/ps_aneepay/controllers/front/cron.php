@@ -36,6 +36,9 @@ class Ps_AneepayCronModuleFrontController extends ModuleFrontController {
 			$webhook   = new AneePayWebhook($api, new AneePayOrder(), $module->getStateMap());
 			$processed = 0;
 
+			// Retention: drop log rows older than the window on every run.
+			$api->pruneLog();
+
 			foreach ((new AneePayOrder())->getPendingOrderIds() as $id_order) {
 				$row = (new AneePayOrder())->getByOrder((int) $id_order);
 

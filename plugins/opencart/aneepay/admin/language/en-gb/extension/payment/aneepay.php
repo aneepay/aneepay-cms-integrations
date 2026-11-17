@@ -35,6 +35,7 @@ $_['entry_paid_status']      = 'Payment confirmed status';
 $_['entry_failed_status']    = 'Payment failed status';
 $_['entry_cancelled_status'] = 'Cancelled status';
 $_['entry_debug']            = 'Debug Log';
+$_['help_debug']             = 'Log every AneePay API request (kept for 14 days). Errors are always logged, even when this is disabled.';
 $_['entry_cron_interval']    = 'Status Sync Interval';
 $_['entry_fee_rule']         = 'Fee rule';
 $_['entry_keep_data']        = 'On uninstall';

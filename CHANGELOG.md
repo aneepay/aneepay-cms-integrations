@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Request tracing is opt-in on every platform: the `debug` option now gates
+  only `info` entries (one row per API call). Errors and warnings are always
+  logged, so production incidents stay diagnosable, and log rows older than
+  14 days are pruned on every cron run plus probabilistically on write.
+  PrestaShop gained the missing `Debug log` setting.
+
+### Changed
+
 - CI: a required `verify` job (tag must equal `VERSION`, version sources, lint)
   now gates both `pack` and `release`; the release publishes `SHA256SUMS`.
 - Webhook `timestamp` is validated for presence and type only — the 24-hour

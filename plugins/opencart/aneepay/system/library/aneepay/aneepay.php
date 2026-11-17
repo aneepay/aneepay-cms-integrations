@@ -12,6 +12,14 @@ class AneePay_Client {
 	const API_BASE = 'https://api.aneepay.com';
 
 	/**
+	 * How long the request log is kept, in days.
+	 */
+	const LOG_RETENTION_DAYS = 14;
+
+	/** One in N log writes prunes expired rows (no cron dependency). */
+	const PRUNE_PROBABILITY = 20;
+
+	/**
 	 * Settings array, keyed by the raw setting name (account_id, webhook_secret,
 	 * site_domain, token, network, test_mode, rate_source, exchange_rate, debug).
 	 *
@@ -477,9 +485,13 @@ class AneePay_Client {
 	/**
 	 * Write a log entry to the oc_aneepay_log table.
 	 *
+	 * Errors and warnings are always stored: support needs them in
+	 * production. Everything else (a trace of every request) is only stored
+	 * when the "debug" setting is on.
+	 *
 	 * @param string $context Context label.
 	 * @param string $message Message.
-	 * @param string $level   Level (info|error).
+	 * @param string $level   Level (info|error|warning).
 	 * @return void
 	 */
 	public function write_log($context, $message, $level = 'info') {
@@ -487,7 +499,41 @@ class AneePay_Client {
 			return;
 		}
 
+		$keep = in_array($level, array('error', 'warning'), true) || $this->debug_enabled();
+
+		if (!$keep) {
+			return;
+		}
+
 		$this->db->query("INSERT INTO `" . DB_PREFIX . "aneepay_log` SET `context` = '" . $this->db->escape($context) . "', `message` = '" . $this->db->escape((string) $message) . "', `level` = '" . $this->db->escape($level) . "', `date_added` = NOW()");
+
+		if (1 === mt_rand(1, self::PRUNE_PROBABILITY)) {
+			$this->prune_log();
+		}
+	}
+
+	/**
+	 * Whether request tracing is enabled (the "debug" setting).
+	 *
+	 * @return bool
+	 */
+	public function debug_enabled() {
+		$value = $this->get('debug', false);
+
+		return in_array($value, array(true, 1, '1', 'on', 'yes'), true);
+	}
+
+	/**
+	 * Delete log rows older than the retention window.
+	 *
+	 * @return void
+	 */
+	public function prune_log() {
+		if (!$this->db) {
+			return;
+		}
+
+		$this->db->query("DELETE FROM `" . DB_PREFIX . "aneepay_log` WHERE `date_added` < DATE_SUB(NOW(), INTERVAL " . (int) self::LOG_RETENTION_DAYS . " DAY)");
 	}
 
 	/**

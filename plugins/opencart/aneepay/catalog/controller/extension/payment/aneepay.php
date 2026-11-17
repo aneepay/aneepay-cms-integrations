@@ -49,6 +49,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'test_mode'      => $this->setting_bool('payment_aneepay_test_mode'),
 			'rate_source'    => (string) $this->config->get('payment_aneepay_rate_source', 'auto'),
 			'exchange_rate'  => (string) $this->config->get('payment_aneepay_exchange_rate', ''),
+			'debug'          => $this->setting_bool('payment_aneepay_debug'),
 		);
 
 		return new AneePay_Client($settings, $this->db);
@@ -535,6 +536,8 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		try {
 			$client  = $this->client();
 			$webhook = new AneePay_Webhook($this->registry, $client, $this->status_map());
+
+			$client->prune_log();
 
 			foreach ($this->model_extension_payment_aneepay->getPendingOrderIds() as $order_id) {
 				$mapping = $this->model_extension_payment_aneepay->getByOrderId($order_id);

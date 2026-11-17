@@ -215,7 +215,7 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 				'title'       => __( 'Debug Log', 'aneepay-crypto-gateway' ),
 				'type'        => 'checkbox',
 				'label'       => __( 'Enable logging', 'aneepay-crypto-gateway' ),
-				'description' => __( 'Log AneePay API requests and responses. Logs can be found in WooCommerce > Status > Logs (source: aneepay).', 'aneepay-crypto-gateway' ),
+				'description' => __( 'Log every AneePay API request and response (kept for 14 days). Errors are always logged, even with this option off. Logs can be found in WooCommerce > Status > Logs (source: aneepay).', 'aneepay-crypto-gateway' ),
 				'default'     => 'no',
 				'desc_tip'    => true,
 			),

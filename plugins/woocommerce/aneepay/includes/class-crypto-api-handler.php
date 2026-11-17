@@ -16,6 +16,11 @@ defined( 'ABSPATH' ) || exit;
 class AneePay_Crypto_API_Handler {
 
 	/**
+	 * How long the in-app request log is kept, in days.
+	 */
+	const LOG_RETENTION_DAYS = 14;
+
+	/**
 	 * Gateway settings instance (WC_Gateway_AneePay_Crypto).
 	 *
 	 * @var WC_Gateway_AneePay_Crypto
@@ -41,15 +46,21 @@ class AneePay_Crypto_API_Handler {
 	}
 
 	/**
-	 * Log a message to the WC logger (only when debug mode is enabled).
+	 * Log a message to the WC logger.
+	 *
+	 * Errors and warnings are always recorded: support needs them in
+	 * production. Everything else (traces of every request) is only written
+	 * when debug mode is enabled.
 	 *
 	 * @param string $context Context label.
 	 * @param mixed  $message Message.
-	 * @param string $level   Log level (info|error|notice).
+	 * @param string $level   Log level (info|error|notice|warning).
 	 * @return void
 	 */
 	public function log( $context, $message, $level = 'info' ) {
-		if ( ! $this->is_debug() ) {
+		$keep = in_array( $level, array( 'error', 'warning' ), true );
+
+		if ( ! $keep && ! $this->is_debug() ) {
 			return;
 		}
 
@@ -510,11 +521,26 @@ class AneePay_Crypto_API_Handler {
 	 * @return void
 	 */
 	protected function record_request( $method, $url, $code, $body, $latency_ms ) {
+		if ( ! $this->is_debug() ) {
+			return;
+		}
+
 		$log = get_option( 'aneepay_request_log', array() );
 
 		if ( ! is_array( $log ) ) {
 			$log = array();
 		}
+
+		$cutoff = time() - ( self::LOG_RETENTION_DAYS * DAY_IN_SECONDS );
+
+		$log = array_values(
+			array_filter(
+				$log,
+				static function ( $entry ) use ( $cutoff ) {
+					return is_array( $entry ) && isset( $entry['time'] ) && (int) $entry['time'] >= $cutoff;
+				}
+			)
+		);
 
 		$log[] = array(
 			'time'    => time(),

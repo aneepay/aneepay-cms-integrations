@@ -137,6 +137,7 @@ class Ps_Aneepay extends PaymentModule {
 			'ANEEPAY_FAILED_STATE'    => (string) Configuration::get('PS_OS_ERROR'),
 			'ANEEPAY_CANCELLED_STATE' => (string) Configuration::get('PS_OS_CANCELED'),
 			'ANEEPAY_KEEP_DATA'       => '1',
+			'ANEEPAY_DEBUG'           => '0',
 		);
 
 		foreach ($defaults as $key => $value) {
@@ -173,6 +174,7 @@ class Ps_Aneepay extends PaymentModule {
 			'test_mode'      => (bool) Configuration::get('ANEEPAY_TEST_MODE'),
 			'rate_source'    => (string) Configuration::get('ANEEPAY_RATE_SOURCE', 'auto'),
 			'exchange_rate'  => (string) Configuration::get('ANEEPAY_EXCHANGE_RATE', ''),
+			'debug'          => (bool) Configuration::get('ANEEPAY_DEBUG'),
 		), Db::getInstance());
 	}
 
@@ -745,6 +747,7 @@ class Ps_Aneepay extends PaymentModule {
 		}
 
 		$valueMap['ANEEPAY_TEST_MODE'] = Tools::getValue('ANEEPAY_TEST_MODE') ? '1' : '0';
+		$valueMap['ANEEPAY_DEBUG'] = Tools::getValue('ANEEPAY_DEBUG') ? '1' : '0';
 
 		foreach ($valueMap as $key => $value) {
 			Configuration::updateValue($key, $value);
@@ -806,6 +809,17 @@ class Ps_Aneepay extends PaymentModule {
 						array('id' => 'active_off', 'value' => 0, 'label' => $this->l('Disabled')),
 					),
 					'desc'     => $this->l('When enabled, payments are created on the Amoy testnet with USDC.'),
+				),
+				array(
+					'type'     => 'switch',
+					'label'    => $this->l('Debug log'),
+					'name'     => 'ANEEPAY_DEBUG',
+					'is_bool'  => true,
+					'values'   => array(
+						array('id' => 'debug_on', 'value' => 1, 'label' => $this->l('Enabled')),
+						array('id' => 'debug_off', 'value' => 0, 'label' => $this->l('Disabled')),
+					),
+					'desc'     => $this->l('Log every AneePay API request (kept for 14 days). Errors are always logged, even when this is disabled.'),
 				),
 			),
 			'submit' => array('title' => $this->l('Save')),

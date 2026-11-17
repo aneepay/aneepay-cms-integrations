@@ -9,6 +9,12 @@
 class AneePayApi {
 	const API_BASE = 'https://api.aneepay.com';
 
+	/** How long the request log is kept, in days. */
+	const LOG_RETENTION_DAYS = 14;
+
+	/** One in N log writes prunes expired rows (no cron dependency). */
+	const PRUNE_PROBABILITY = 20;
+
 	/** @var array Settings (account_id, webhook_secret, site_domain, token, network, test_mode, rate_source, exchange_rate, host). */
 	protected $settings;
 
@@ -417,8 +423,21 @@ class AneePayApi {
 		)), 'info');
 	}
 
+	/**
+	 * Store a log row.
+	 *
+	 * Errors and warnings are always stored: support needs them in
+	 * production. Everything else (a trace of every request) is only stored
+	 * when the "Debug log" setting is on.
+	 */
 	public function write_log($context, $message, $level = 'info') {
 		if (!$this->db || !method_exists($this->db, 'insert')) {
+			return;
+		}
+
+		$keep = in_array($level, array('error', 'warning'), true) || $this->debugEnabled();
+
+		if (!$keep) {
 			return;
 		}
 
@@ -428,6 +447,32 @@ class AneePayApi {
 			'level'      => pSQL($level),
 			'date_added' => date('Y-m-d H:i:s'),
 		));
+
+		if (1 === mt_rand(1, self::PRUNE_PROBABILITY)) {
+			$this->pruneLog();
+		}
+	}
+
+	/**
+	 * Whether request tracing is enabled (the "Debug log" setting).
+	 */
+	public function debugEnabled() {
+		$value = $this->get('debug', false);
+
+		return in_array($value, array(true, 1, '1', 'on', 'yes'), true);
+	}
+
+	/**
+	 * Delete log rows older than the retention window.
+	 */
+	public function pruneLog() {
+		if (!$this->db || !method_exists($this->db, 'execute')) {
+			return;
+		}
+
+		$this->db->execute(
+			'DELETE FROM `' . _DB_PREFIX_ . 'aneepay_log` WHERE `date_added` < DATE_SUB(NOW(), INTERVAL ' . (int) self::LOG_RETENTION_DAYS . ' DAY)'
+		);
 	}
 
 	protected function shorten_url($url) {
