@@ -6,16 +6,16 @@ packaged into a separate artifact.
 
 - **AneePay** — a non-custodial crypto payment system with a 0.5% fee, no KYC,
   hosted checkout, HMAC-SHA256-signed webhooks, and a sandbox (Amoy).
-- API documentation and the payment model are in
-  [`docs/INTEGRATION.md`](docs/INTEGRATION.md) (not tracked in git).
+- API documentation and the payment model are not part of this repository:
+  see <https://docs.aneepay.com>.
 
 ## Plugins
 
-| Platform         | Folder                                                           | Build                  | Artifact                          | Roadmap                                                    |
-| ---------------- | ---------------------------------------------------------------- | ---------------------- | --------------------------------- | ---------------------------------------------------------- |
-| WooCommerce      | [`plugins/woocommerce/aneepay`](plugins/woocommerce/aneepay)     | `./scripts/pack.sh wc` | `dist/wc/aneepay.zip`             | [`docs/ROADMAP.md`](docs/ROADMAP.md)                       |
-| OpenCart 3.x     | [`plugins/opencart/aneepay`](plugins/opencart/aneepay)           | `./scripts/pack.sh oc` | `dist/oc/aneepay-<ver>.ocmod.zip` | [`docs/ROADMAP-OPENCART.md`](docs/ROADMAP-OPENCART.md)     |
-| PrestaShop 1.7/8 | [`plugins/prestashop/ps_aneepay`](plugins/prestashop/ps_aneepay) | `./scripts/pack.sh ps` | `dist/ps/ps_aneepay.zip`          | [`docs/ROADMAP-PRESTASHOP.md`](docs/ROADMAP-PRESTASHOP.md) |
+| Platform         | Folder                                                           | Build                  | Artifact                          |
+| ---------------- | ---------------------------------------------------------------- | ---------------------- | --------------------------------- |
+| WooCommerce      | [`plugins/woocommerce/aneepay`](plugins/woocommerce/aneepay)     | `./scripts/pack.sh wc` | `dist/wc/aneepay.zip`             |
+| OpenCart 3.x     | [`plugins/opencart/aneepay`](plugins/opencart/aneepay)           | `./scripts/pack.sh oc` | `dist/oc/aneepay-<ver>.ocmod.zip` |
+| PrestaShop 1.7/8 | [`plugins/prestashop/ps_aneepay`](plugins/prestashop/ps_aneepay) | `./scripts/pack.sh ps` | `dist/ps/ps_aneepay.zip`          |
 
 Status: all three plugins are working implementations.
 
@@ -63,7 +63,6 @@ docker compose up --build
 ```
 .
 ├── VERSION                            # shared release version
-├── docs/                              # INTEGRATION.md + ROADMAPs (local, not tracked)
 ├── plugins/
 │   ├── woocommerce/aneepay/           # WC plugin (PHP)
 │   ├── opencart/aneepay/              # OC extension (PHP)
@@ -72,10 +71,6 @@ docker compose up --build
 ├── docker/                            # local test shops (woocommerce/, opencart/, prestashop/)
 └── .github/workflows/release.yml      # CI: lint + package + release
 ```
-
-> When working from [`docs/INTEGRATION.md`](docs/INTEGRATION.md), see §8 (the recipe for
-> creating plugins for any CMS) — it is the common foundation for all three
-> platforms.
 
 > See [`TECHDEBT.md`](TECHDEBT.md) for the planned extraction of a shared
 > platform-agnostic core (currently the pure logic is duplicated per plugin).

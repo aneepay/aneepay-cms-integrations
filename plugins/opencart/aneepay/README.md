@@ -1,7 +1,7 @@
 # AneePay Crypto Gateway — OpenCart 3.x
 
 Status: **working implementation** (mirrors the WooCommerce plugin).
-Reference implementation — `../woocommerce/aneepay`. Plan — `../../docs/ROADMAP-OPENCART.md`.
+Reference implementation — `../woocommerce/aneepay`.
 
 ## Files
 

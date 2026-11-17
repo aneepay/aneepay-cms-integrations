@@ -6,7 +6,7 @@ Auto-installs PrestaShop 8.1 (official image) + the AneePay module.
 > enabled, its `paymentOptions` hook and the `aneepay_*` tables are created, and
 > the module front controllers (`webhook`/`success`/`fail`/`cron`/`check`/
 > `payment`) route correctly. The module still lacks the admin extras and the
-> buyer "waiting" screen (see `docs/ROADMAP-PRESTASHOP.md`).
+> buyer "waiting" screen.
 
 ## Run
 

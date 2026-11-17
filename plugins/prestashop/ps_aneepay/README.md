@@ -1,7 +1,7 @@
 # AneePay Crypto Gateway — PrestaShop 1.7 / 8.x
 
 Status: **working implementation** (first pass; mirrors the WooCommerce plugin).
-Reference — `../woocommerce/aneepay`. Plan — `../../docs/ROADMAP-PRESTASHOP.md`.
+Reference — `../woocommerce/aneepay`.
 
 ## Files
 
