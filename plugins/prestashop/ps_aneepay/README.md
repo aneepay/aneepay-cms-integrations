@@ -56,6 +56,9 @@ ps_aneepay/
   `event_id` (or `sha256(body)` for legacy payloads): a retry gets HTTP 200 and
   changes nothing, rows are pruned after 7 days, and a sandbox payment never
   completes a live order.
+- One mapping per order: `id_order` is unique. Duplicates from older releases
+  are merged on the first write (newest row wins, keeps `stock_restored`), and
+  the row is upserted, so `stock_restored` is never reset.
 - PrestaShop has no built-in cron: add the cron URL above to your server crontab.
 - Uninstall keeps the `ps_aneepay_order` / `ps_aneepay_log` tables by default;
   disable "Keep data on uninstall" in the settings to drop them.

@@ -45,6 +45,9 @@ install.xml                                            # ocmod manifest (add-on 
   (or `sha256(body)` for legacy payloads): a retry gets HTTP 200 and changes
   nothing, rows are pruned after 7 days, and a sandbox payment never completes a
   live order.
+- One mapping per order: `order_id` is unique. Duplicates from older releases are
+  merged on the first write (newest row wins, keeps `stock_restored`), and the
+  row is upserted, so `stock_restored` is never reset.
 - Cron is not built into OpenCart: add the cron URL above to your server crontab.
 - Uninstall keeps the `aneepay_order` / `aneepay_log` tables by default; set
   "On uninstall" to "Delete data" in the settings to drop them.

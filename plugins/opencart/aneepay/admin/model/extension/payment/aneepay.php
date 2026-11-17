@@ -29,7 +29,7 @@ class ModelExtensionPaymentAneePay extends Model {
 			`stock_restored` TINYINT(1) NOT NULL DEFAULT 0,
 			`date_added` DATETIME NOT NULL,
 			PRIMARY KEY (`id`),
-			KEY `order_id` (`order_id`),
+			UNIQUE KEY `order_id` (`order_id`),
 			KEY `payment_id` (`payment_id`),
 			KEY `operation_id` (`operation_id`)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");

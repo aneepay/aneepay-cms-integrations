@@ -15,7 +15,7 @@ class ModelExtensionPaymentAneePay extends Model {
 	 * @return void
 	 */
 	public function addMapping($order_id, $data) {
-		$this->db->query("DELETE FROM `" . DB_PREFIX . "aneepay_order` WHERE `order_id` = '" . (int) $order_id . "'");
+		$this->ensureOrderIndex();
 
 		$this->db->query("INSERT INTO `" . DB_PREFIX . "aneepay_order` SET
 			`order_id` = '" . (int) $order_id . "',
@@ -33,7 +33,69 @@ class ModelExtensionPaymentAneePay extends Model {
 			`usd_amount` = '" . $this->db->escape(isset($data['usd_amount']) ? $data['usd_amount'] : '') . "',
 			`fiat_per_usd` = '" . $this->db->escape(isset($data['fiat_per_usd']) ? $data['fiat_per_usd'] : '') . "',
 			`rate_source` = '" . $this->db->escape(isset($data['rate_source']) ? $data['rate_source'] : '') . "',
-			`date_added` = NOW()");
+			`date_added` = NOW()
+			ON DUPLICATE KEY UPDATE
+			`payment_id` = VALUES(`payment_id`),
+			`operation_id` = VALUES(`operation_id`),
+			`checkout_url` = VALUES(`checkout_url`),
+			`token` = VALUES(`token`),
+			`network` = VALUES(`network`),
+			`sandbox` = VALUES(`sandbox`),
+			`payment_status` = VALUES(`payment_status`),
+			`token_amount` = VALUES(`token_amount`),
+			`order_currency` = VALUES(`order_currency`),
+			`order_total` = VALUES(`order_total`),
+			`usd_amount` = VALUES(`usd_amount`),
+			`fiat_per_usd` = VALUES(`fiat_per_usd`),
+			`rate_source` = VALUES(`rate_source`)");
+	}
+
+	/**
+	 * Guarantee one mapping row per order.
+	 *
+	 * Existing installations created a plain (non-unique) index, so
+	 * duplicates may already exist. They are merged first — the newest row
+	 * survives, inheriting `stock_restored` and a `success` status — and only
+	 * then the index is tightened, which also makes the upsert in
+	 * addMapping() race-free.
+	 *
+	 * @return void
+	 */
+	protected function ensureOrderIndex() {
+		static $done = false;
+
+		if ($done) {
+			return;
+		}
+
+		$done = true;
+
+		$table = DB_PREFIX . 'aneepay_order';
+		$index = $this->db->query("SHOW INDEX FROM `" . $table . "` WHERE `Key_name` = 'order_id'");
+
+		if ($index->num_rows && 0 === (int) $index->row['Non_unique']) {
+			return;
+		}
+
+		$this->db->query("UPDATE `" . $table . "` o
+			JOIN (
+				SELECT `order_id`, MAX(`id`) AS keep_id, MAX(`stock_restored`) AS stock_restored, MAX(`payment_status` = 'success') AS has_success
+				FROM `" . $table . "` GROUP BY `order_id` HAVING COUNT(*) > 1
+			) d ON o.`id` = d.keep_id
+			SET o.`stock_restored` = GREATEST(o.`stock_restored`, d.stock_restored),
+				o.`payment_status` = IF(d.has_success = 1, 'success', o.`payment_status`)");
+
+		$this->db->query("DELETE o FROM `" . $table . "` o
+			JOIN (
+				SELECT `order_id`, MAX(`id`) AS keep_id
+				FROM `" . $table . "` GROUP BY `order_id` HAVING COUNT(*) > 1
+			) d ON o.`order_id` = d.order_id AND o.`id` <> d.keep_id");
+
+		if ($index->num_rows) {
+			$this->db->query("ALTER TABLE `" . $table . "` DROP INDEX `order_id`");
+		}
+
+		$this->db->query("ALTER TABLE `" . $table . "` ADD UNIQUE KEY `order_id` (`order_id`)");
 	}
 
 	/**

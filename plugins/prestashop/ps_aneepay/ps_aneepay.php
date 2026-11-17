@@ -79,7 +79,7 @@ class Ps_Aneepay extends PaymentModule {
 			`stock_restored` TINYINT(1) NOT NULL DEFAULT 0,
 			`date_added` DATETIME NOT NULL,
 			PRIMARY KEY (`id`),
-			KEY `id_order` (`id_order`),
+			UNIQUE KEY `id_order` (`id_order`),
 			KEY `payment_id` (`payment_id`),
 			KEY `operation_id` (`operation_id`)
 		) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci';

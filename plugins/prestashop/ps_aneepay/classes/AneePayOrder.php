@@ -15,26 +15,106 @@ class AneePayOrder {
 	public function saveMapping($id_order, $data) {
 		$db = Db::getInstance();
 
-		$db->delete(self::TABLE, 'id_order = ' . (int) $id_order);
+		self::ensureSchema();
 
-		return $db->insert(self::TABLE, array(
-			'id_order'       => (int) $id_order,
-			'id_cart'        => isset($data['id_cart']) ? (int) $data['id_cart'] : 0,
-			'payment_id'     => isset($data['payment_id']) ? pSQL($data['payment_id']) : '',
-			'operation_id'   => isset($data['operation_id']) ? pSQL($data['operation_id']) : '',
-			'checkout_url'   => isset($data['checkout_url']) ? pSQL($data['checkout_url']) : '',
-			'token'          => isset($data['token']) ? pSQL($data['token']) : '',
-			'network'        => isset($data['network']) ? pSQL($data['network']) : '',
-			'sandbox'        => isset($data['sandbox']) ? (int) $data['sandbox'] : 0,
-			'payment_status' => isset($data['payment_status']) ? pSQL($data['payment_status']) : 'pending',
-			'token_amount'   => isset($data['token_amount']) ? pSQL($data['token_amount']) : '',
-			'order_currency' => isset($data['order_currency']) ? pSQL($data['order_currency']) : '',
-			'order_total'    => isset($data['order_total']) ? pSQL($data['order_total']) : '',
-			'usd_amount'     => isset($data['usd_amount']) ? pSQL($data['usd_amount']) : '',
-			'fiat_per_usd'   => isset($data['fiat_per_usd']) ? pSQL($data['fiat_per_usd']) : '',
-			'rate_source'    => isset($data['rate_source']) ? pSQL($data['rate_source']) : '',
-			'date_added'     => date('Y-m-d H:i:s'),
-		));
+		$table = _DB_PREFIX_ . self::TABLE;
+
+		$sql = 'INSERT INTO `' . $table . '` SET
+			`id_order` = ' . (int) $id_order . ',
+			`id_cart` = ' . (isset($data['id_cart']) ? (int) $data['id_cart'] : 0) . ',
+			`payment_id` = \'' . pSQL(isset($data['payment_id']) ? $data['payment_id'] : '') . '\',
+			`operation_id` = \'' . pSQL(isset($data['operation_id']) ? $data['operation_id'] : '') . '\',
+			`checkout_url` = \'' . pSQL(isset($data['checkout_url']) ? $data['checkout_url'] : '') . '\',
+			`token` = \'' . pSQL(isset($data['token']) ? $data['token'] : '') . '\',
+			`network` = \'' . pSQL(isset($data['network']) ? $data['network'] : '') . '\',
+			`sandbox` = ' . (isset($data['sandbox']) ? (int) $data['sandbox'] : 0) . ',
+			`payment_status` = \'' . pSQL(isset($data['payment_status']) ? $data['payment_status'] : 'pending') . '\',
+			`token_amount` = \'' . pSQL(isset($data['token_amount']) ? $data['token_amount'] : '') . '\',
+			`order_currency` = \'' . pSQL(isset($data['order_currency']) ? $data['order_currency'] : '') . '\',
+			`order_total` = \'' . pSQL(isset($data['order_total']) ? $data['order_total'] : '') . '\',
+			`usd_amount` = \'' . pSQL(isset($data['usd_amount']) ? $data['usd_amount'] : '') . '\',
+			`fiat_per_usd` = \'' . pSQL(isset($data['fiat_per_usd']) ? $data['fiat_per_usd'] : '') . '\',
+			`rate_source` = \'' . pSQL(isset($data['rate_source']) ? $data['rate_source'] : '') . '\',
+			`date_added` = \'' . pSQL(date('Y-m-d H:i:s')) . '\'
+			ON DUPLICATE KEY UPDATE
+			`id_cart` = VALUES(`id_cart`),
+			`payment_id` = VALUES(`payment_id`),
+			`operation_id` = VALUES(`operation_id`),
+			`checkout_url` = VALUES(`checkout_url`),
+			`token` = VALUES(`token`),
+			`network` = VALUES(`network`),
+			`sandbox` = VALUES(`sandbox`),
+			`payment_status` = VALUES(`payment_status`),
+			`token_amount` = VALUES(`token_amount`),
+			`order_currency` = VALUES(`order_currency`),
+			`order_total` = VALUES(`order_total`),
+			`usd_amount` = VALUES(`usd_amount`),
+			`fiat_per_usd` = VALUES(`fiat_per_usd`),
+			`rate_source` = VALUES(`rate_source`)';
+
+		return (bool) $db->execute($sql);
+	}
+
+	/**
+	 * Guarantee one mapping row per order.
+	 *
+	 * Existing installations created a plain (non-unique) index and wrote
+	 * with DELETE + INSERT, so duplicates may already exist. They are merged
+	 * first — the newest row survives, inheriting `stock_restored` and a
+	 * `success` status — and only then the index is tightened, which also
+	 * makes the upsert in saveMapping() race-free.
+	 *
+	 * Runs once per request at most; guarded by a configuration flag.
+	 *
+	 * @return void
+	 */
+	public static function ensureSchema()
+	{
+		static $done = false;
+
+		if ($done) {
+			return;
+		}
+
+		$done = true;
+
+		if ('2' === (string) Configuration::get('ANEEPAY_ORDER_SCHEMA')) {
+			return;
+		}
+
+		$db    = Db::getInstance();
+		$table = _DB_PREFIX_ . self::TABLE;
+
+		$index = $db->getRow('SHOW INDEX FROM `' . $table . '` WHERE `Key_name` = \'id_order\'');
+
+		if (!$index) {
+			return;
+		}
+
+		if (0 === (int) $index['Non_unique']) {
+			Configuration::updateValue('ANEEPAY_ORDER_SCHEMA', '2');
+
+			return;
+		}
+
+		$db->execute('UPDATE `' . $table . '` o
+			JOIN (
+				SELECT `id_order`, MAX(`id`) AS keep_id, MAX(`stock_restored`) AS stock_restored, MAX(`payment_status` = \'success\') AS has_success
+				FROM `' . $table . '` GROUP BY `id_order` HAVING COUNT(*) > 1
+			) d ON o.`id` = d.keep_id
+			SET o.`stock_restored` = GREATEST(o.`stock_restored`, d.stock_restored),
+				o.`payment_status` = IF(d.has_success = 1, \'success\', o.`payment_status`)');
+
+		$db->execute('DELETE o FROM `' . $table . '` o
+			JOIN (
+				SELECT `id_order`, MAX(`id`) AS keep_id
+				FROM `' . $table . '` GROUP BY `id_order` HAVING COUNT(*) > 1
+			) d ON o.`id_order` = d.id_order AND o.`id` <> d.keep_id');
+
+		$db->execute('ALTER TABLE `' . $table . '` DROP INDEX `id_order`');
+		$db->execute('ALTER TABLE `' . $table . '` ADD UNIQUE KEY `id_order` (`id_order`)');
+
+		Configuration::updateValue('ANEEPAY_ORDER_SCHEMA', '2');
 	}
 
 	/** @return array|null */

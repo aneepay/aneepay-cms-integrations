@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`languages/`), OpenCart `error_*` keys, PrestaShop `translations/en.php`;
   each plugin maps the failure to `config`, `network`, `auth`, `rate_limit`,
   `request`, `server` or `invalid`.
+- One payment mapping per order: `order_id` (OpenCart) and `id_order`
+  (PrestaShop) are unique keys now. Duplicates left by earlier releases are
+  merged on the first write — the newest row survives and inherits
+  `stock_restored` and a `success` status from its siblings.
 
 ### Changed
 
@@ -46,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   logged, so production incidents stay diagnosable, and log rows older than
   14 days are pruned on every cron run plus probabilistically on write.
   PrestaShop gained the missing `Debug log` setting.
+- The order mapping is written with an upsert instead of `DELETE` + `INSERT`:
+  `stock_restored` is never reset (no double stock return) and there is no
+  window where the mapping row is missing while a webhook resolves an order.
 
 ### Changed
 
