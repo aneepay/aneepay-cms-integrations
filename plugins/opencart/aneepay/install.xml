@@ -2,7 +2,7 @@
 <modification>
   <name>AneePay Crypto Gateway (USDT/USDC/DAI)</name>
   <code>aneepay</code>
-  <version>1.2.0</version>
+  <version>1.3.0-beta</version>
   <author>AneePay</author>
   <link>https://aneepay.com</link>
   <!-- This extension only adds new files (via the upload/ folder); no core

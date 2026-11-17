@@ -19,7 +19,7 @@ class Ps_Aneepay extends PaymentModule {
 	public function __construct() {
 		$this->name                  = 'ps_aneepay';
 		$this->tab                   = 'payments_gateways';
-		$this->version               = '1.2.0';
+		$this->version               = '1.3.0-beta';
 		$this->author                = 'AneePay';
 		$this->need_instance         = 0;
 		$this->bootstrap             = true;
