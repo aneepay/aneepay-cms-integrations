@@ -35,3 +35,4 @@ $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_21f3dd67b3e0a9c8fa43d92d06789ceb'] 
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_fad857d5c329e6b67a007175c80bc7fe'] = 'Reconcile';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_ceea7f7c87cdafea3bdc33323f7264f0'] = 'AneePay did not return the payment list (HTTP %d).';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_82c28e5ee5352be2646077987c6cd455'] = 'Checked %1$d payments: %2$d matched an order, %3$d were updated, %4$d had no order.';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_7b6501c829a16fbd3902900197e774b2'] = 'A payment for this order is already being created. Please wait a moment and refresh the page.';

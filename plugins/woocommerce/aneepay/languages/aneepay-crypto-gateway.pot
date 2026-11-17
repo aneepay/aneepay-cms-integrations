@@ -177,3 +177,6 @@ msgstr ""
 msgid "Checked %1$d payments: %2$d matched an order, %3$d were updated, %4$d had no order."
 msgstr ""
 
+#: includes/class-wc-gateway-crypto.php
+msgid "A payment for this order is already being created. Please wait a moment and refresh the page."
+msgstr ""

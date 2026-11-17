@@ -35,6 +35,16 @@ class AneePay_Crypto_API_Handler {
 	protected $last_http_code = 0;
 
 	/**
+	 * Whether the last create_payment() call failed without telling us whether a
+	 * payment was created: a transport error (timeout, DNS, TLS) or a success
+	 * status with a body we could not read. Such an outcome must never be
+	 * retried blindly — the payment may already exist.
+	 *
+	 * @var bool
+	 */
+	protected $create_outcome_unknown = false;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param WC_Gateway_AneePay_Crypto $gateway Gateway instance.
@@ -212,6 +222,8 @@ class AneePay_Crypto_API_Handler {
 	 * @throws RuntimeException When the API request fails or the Account ID is missing.
 	 */
 	public function create_payment( $amount, $order ) {
+		$this->create_outcome_unknown = false;
+
 		$account_id = $this->get_account_id();
 
 		if ( '' === $account_id ) {
@@ -258,6 +270,9 @@ class AneePay_Crypto_API_Handler {
 	 */
 	protected function parse_create_response( $response ) {
 		if ( is_wp_error( $response ) ) {
+			// The request may have reached the API before the connection broke.
+			$this->create_outcome_unknown = true;
+
 			$this->log( 'create_payment', $response->get_error_message(), 'error' );
 			throw new RuntimeException( $this->customer_error_message( 'network' ) );
 		}
@@ -280,6 +295,9 @@ class AneePay_Crypto_API_Handler {
 		$json = json_decode( $body, true, 512, JSON_BIGINT_AS_STRING );
 
 		if ( ! is_array( $json ) ) {
+			// A 2xx with a body we cannot read: the payment probably exists.
+			$this->create_outcome_unknown = true;
+
 			$this->log( 'create_payment', 'Invalid JSON response: ' . $body, 'error' );
 			throw new RuntimeException( $this->customer_error_message( 'invalid' ) );
 		}
@@ -290,6 +308,8 @@ class AneePay_Crypto_API_Handler {
 		$status       = isset( $json['status'] ) ? sanitize_key( (string) $json['status'] ) : '';
 
 		if ( empty( $payment_id ) || empty( $operation_id ) || empty( $checkout_url ) ) {
+			$this->create_outcome_unknown = true;
+
 			$this->log( 'create_payment', 'Missing required fields in response: ' . $body, 'error' );
 			throw new RuntimeException( $this->customer_error_message( 'invalid' ) );
 		}
@@ -460,6 +480,19 @@ class AneePay_Crypto_API_Handler {
 	 */
 	public function last_http_code() {
 		return (int) $this->last_http_code;
+	}
+
+	/**
+	 * Whether the last create_payment() call had an unknown outcome.
+	 *
+	 * True means the request may have created a payment even though the call
+	 * failed: never repeat it without looking the payment up in the account
+	 * list first.
+	 *
+	 * @return bool
+	 */
+	public function create_outcome_unknown() {
+		return (bool) $this->create_outcome_unknown;
 	}
 
 	/**

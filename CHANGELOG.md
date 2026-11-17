@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   applies its status immediately. This is the escape hatch for "the buyer paid,
   the order is still pending", because webhooks only ever deliver `success` and
   there is no replay endpoint.
+- No second payment for the same order. A per-order lock (a WC option, an
+  OpenCart/PrestaShop mapping row in a `creating` state) rejects a parallel
+  request, and when the outcome of `create_payment` is unknown (transport error
+  or an unreadable response) the plugin looks the payment up in
+  `GET /accounts/{id}/payments` for the last hour, matches it by amount and
+  order reference and reuses it. A blind retry is never issued, because the API
+  has no `Idempotency-Key`.
 - A manual **Reconcile** tool on every settings page: it reads the account
   payment list for the last N days (1–30), applies the status of every payment
   that matches an order and reports `checked` / `matched` / `updated` /

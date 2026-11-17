@@ -56,6 +56,56 @@ class AneePayOrder {
 	}
 
 	/**
+	 * Claim the right to create a payment for an order.
+	 *
+	 * The AneePay API has no Idempotency-Key, so two concurrent entries for the
+	 * same order would create two payable invoices. `id_order` is unique, so an
+	 * INSERT IGNORE of a row in the "creating" state is an atomic claim: exactly
+	 * one request inserts it. saveMapping() turns the row into the real mapping
+	 * and releaseClaim() removes it when nothing was created.
+	 *
+	 * @param int $id_order Order id.
+	 * @param int $minutes  Age after which a "creating" row is considered stale.
+	 * @return bool True when this request owns the claim.
+	 */
+	public function claimOrder($id_order, $minutes = 10) {
+		$id_order = (int) $id_order;
+
+		if ($id_order <= 0) {
+			return false;
+		}
+
+		self::ensureSchema();
+
+		$db    = Db::getInstance();
+		$table = _DB_PREFIX_ . self::TABLE;
+
+		// A request that died between the claim and the mapping must not block
+		// the order forever.
+		$db->execute('DELETE FROM `' . $table . '`
+			WHERE `id_order` = ' . $id_order . '
+			AND `payment_status` = \'creating\'
+			AND `date_added` < DATE_SUB(NOW(), INTERVAL ' . max(1, (int) $minutes) . ' MINUTE)');
+
+		$db->execute('INSERT IGNORE INTO `' . $table . '` (`id_order`, `id_cart`, `payment_status`, `date_added`)
+			VALUES (' . $id_order . ', 0, \'creating\', NOW())');
+
+		return $db->Affected_Rows() > 0;
+	}
+
+	/**
+	 * Drop the claim taken by claimOrder() when no payment was created.
+	 *
+	 * @param int $id_order Order id.
+	 * @return void
+	 */
+	public function releaseClaim($id_order) {
+		Db::getInstance()->execute('DELETE FROM `' . _DB_PREFIX_ . self::TABLE . '`
+			WHERE `id_order` = ' . (int) $id_order . '
+			AND `payment_status` = \'creating\'');
+	}
+
+	/**
 	 * Guarantee one mapping row per order.
 	 *
 	 * Existing installations created a plain (non-unique) index and wrote

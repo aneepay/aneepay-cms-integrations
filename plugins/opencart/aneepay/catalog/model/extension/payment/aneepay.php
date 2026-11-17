@@ -51,6 +51,58 @@ class ModelExtensionPaymentAneePay extends Model {
 	}
 
 	/**
+	 * Claim the right to create a payment for an order.
+	 *
+	 * The AneePay API has no Idempotency-Key, so two concurrent confirms for the
+	 * same order would create two payable invoices. `order_id` is unique, so an
+	 * INSERT IGNORE of a row in the "creating" state is an atomic claim: exactly
+	 * one request inserts it. The row is turned into the real mapping by
+	 * addMapping() and removed again by releaseClaim() when nothing was created.
+	 *
+	 * @param int $order_id Order id.
+	 * @param int $minutes  Age after which a "creating" row is considered stale.
+	 * @return bool True when this request owns the claim.
+	 */
+	public function claimOrder($order_id, $minutes = 10) {
+		$order_id = (int) $order_id;
+
+		if ($order_id <= 0) {
+			return false;
+		}
+
+		$this->ensureOrderIndex();
+
+		$table = DB_PREFIX . 'aneepay_order';
+
+		// A request that died between the claim and the mapping must not block
+		// the order forever.
+		$this->db->query("DELETE FROM `" . $table . "`
+			WHERE `order_id` = '" . $order_id . "'
+			AND `payment_status` = 'creating'
+			AND `date_added` < DATE_SUB(NOW(), INTERVAL " . max(1, (int) $minutes) . " MINUTE)");
+
+		$this->db->query("INSERT IGNORE INTO `" . $table . "` SET
+			`order_id` = '" . $order_id . "',
+			`store_id` = '" . (int) $this->config->get('config_store_id') . "',
+			`payment_status` = 'creating',
+			`date_added` = NOW()");
+
+		return $this->db->countAffected() > 0;
+	}
+
+	/**
+	 * Drop the claim taken by claimOrder() when no payment was created.
+	 *
+	 * @param int $order_id Order id.
+	 * @return void
+	 */
+	public function releaseClaim($order_id) {
+		$this->db->query("DELETE FROM `" . DB_PREFIX . "aneepay_order`
+			WHERE `order_id` = '" . (int) $order_id . "'
+			AND `payment_status` = 'creating'");
+	}
+
+	/**
 	 * Guarantee one mapping row per order.
 	 *
 	 * Existing installations created a plain (non-unique) index, so

@@ -166,11 +166,26 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 		$client = $this->client();
 
+		// Creation lock: without an Idempotency-Key on the API, a second confirm
+		// for the same order (double click, two tabs) would create a second
+		// payable invoice. The unique order_id makes the claim atomic.
+		if (!$this->model_extension_payment_aneepay->claimOrder($order_id)) {
+			$this->session->data['error_warning'] = $this->language->get('error_payment_in_progress');
+
+			$this->response->redirect($this->url->link('checkout/confirm', '', true));
+
+			return;
+		}
+
+		$token_amount = '';
+
 		try {
 			$converter = new AneePay_Usd_Converter($client);
 			$client->set_config('store_rate', $this->store_rate((string) $order_info['currency_code']));
 
 			$converted = $converter->convert((float) $order_info['total'], (string) $order_info['currency_code']);
+
+			$token_amount = (string) $converted['token_amount'];
 
 			$created = $client->create_payment($converted['token_amount'], 'Order #' . $order_id);
 
@@ -199,11 +214,55 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 			$this->response->redirect((string) $created['checkout_url']);
 		} catch (Exception $e) {
+			$kind = $e instanceof AneePay_Api_Exception ? $e->get_kind() : AneePay_Api_Exception::KIND_REQUEST;
+
+			// A definite failure (HTTP error) created nothing. A transport error
+			// or an unreadable 2xx body may have created a payment: look it up
+			// and adopt it instead of charging the buyer twice.
+			$unknown = in_array($kind, array(AneePay_Api_Exception::KIND_NETWORK, AneePay_Api_Exception::KIND_INVALID), true);
+
+			if ($unknown && '' !== $token_amount) {
+				$found = $this->find_created_payment($client, '#' . $order_id, $token_amount);
+
+				if (null !== $found) {
+					$this->model_extension_payment_aneepay->addMapping($order_id, array(
+						'payment_id'     => $found['payment_id'],
+						'operation_id'   => $found['operation_id'],
+						'checkout_url'   => $found['checkout_url'],
+						'token'          => $client->get_token(),
+						'network'        => $client->get_network(),
+						'sandbox'        => $client->is_sandbox() ? 1 : 0,
+						'payment_status' => 'pending',
+						'token_amount'   => number_format((float) $token_amount, 2, '.', ''),
+						'order_currency' => (string) $order_info['currency_code'],
+						'order_total'    => (string) $order_info['total'],
+						'usd_amount'     => number_format((float) $converted['usd_amount'], 2, '.', ''),
+						'fiat_per_usd'   => (string) $converted['fiat_per_usd'],
+						'rate_source'    => (string) $converted['source'],
+					));
+
+					$pending_status = (int) $this->config->get('payment_aneepay_pending_status_id');
+					$pending_status = $pending_status ? $pending_status : 1;
+
+					$this->model_checkout_order->addOrderHistory($order_id, $pending_status, $this->language->get('text_pending'), true);
+
+					$this->session->data['aneepay_order'] = $order_id;
+
+					$this->response->redirect((string) $found['checkout_url']);
+
+					return;
+				}
+
+				$client->write_log('confirm', 'Unknown outcome for order #' . $order_id . ' and no matching payment in the account list; the shopper may retry.', 'warning');
+			}
+
+			// Nothing was created: free the claim so the buyer can retry.
+			$this->model_extension_payment_aneepay->releaseClaim($order_id);
+
 			// The order is left untouched. The shopper sees one short translated
 			// sentence; the technical reason stays in the request log.
 			$client->write_log('confirm', 'Payment creation failed: ' . $e->getMessage(), 'error');
 
-			$kind = $e instanceof AneePay_Api_Exception ? $e->get_kind() : AneePay_Api_Exception::KIND_REQUEST;
 			$key  = 'error_' . $kind;
 			$text = $this->language->get($key);
 
@@ -668,6 +727,64 @@ class ControllerExtensionPaymentAneePay extends Controller {
 	 * @param int    $minutes    Expiry window in minutes.
 	 * @return bool
 	 */
+	/**
+	 * Look for a payment that a failed create_payment() call may have created.
+	 *
+	 * Only used when the outcome is unknown (transport error or an unreadable
+	 * 2xx body). The payment is matched by token amount and by the order
+	 * reference in its description, so a payment of another order is never
+	 * adopted.
+	 *
+	 * @param AneePay_Client $client       API client.
+	 * @param string         $reference    Order reference as it appears in description ("#123").
+	 * @param string         $token_amount Token amount sent to the API.
+	 * @return array|null
+	 */
+	protected function find_created_payment($client, $reference, $token_amount) {
+		$rows = $client->list_payments(gmdate('Y-m-d\TH:i:s\Z', time() - 3600));
+
+		if (!is_array($rows)) {
+			return null;
+		}
+
+		$expected = round((float) $token_amount, 2);
+
+		foreach ($rows as $row) {
+			if (!is_array($row)) {
+				continue;
+			}
+
+			$payment_id   = isset($row['id']) ? (string) $row['id'] : '';
+			$operation_id = isset($row['operation_id']) ? (string) $row['operation_id'] : '';
+			$checkout_url = isset($row['checkout_url']) ? (string) $row['checkout_url'] : '';
+
+			if ('' === $payment_id || '' === $operation_id || '' === $checkout_url) {
+				continue;
+			}
+
+			if (!isset($row['amount']) || round((float) $row['amount'], 2) !== $expected) {
+				continue;
+			}
+
+			$description = isset($row['description']) ? (string) $row['description'] : '';
+
+			if ('' === $reference || false === strpos($description, $reference)) {
+				continue;
+			}
+
+			$client->write_log('confirm', 'Adopted AneePay payment ' . $payment_id . ' after an unknown create_payment() outcome.', 'warning');
+
+			return array(
+				'payment_id'   => $payment_id,
+				'operation_id' => $operation_id,
+				'checkout_url' => $checkout_url,
+				'status'       => isset($row['status']) ? (string) $row['status'] : '',
+			);
+		}
+
+		return null;
+	}
+
 	protected function pending_is_expired($date_added, $minutes) {
 		$created = strtotime((string) $date_added);
 

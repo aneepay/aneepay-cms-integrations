@@ -96,13 +96,50 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 			return;
 		}
 
+		// One payment at a time per order: a request that got this far anyway
+		// (duplicate tab, retry with a fresh token) must not create a second
+		// AneePay payment for the same order.
+		if (!$order_model->claimOrder($id_order)) {
+			$api->write_log('payment', 'A payment for order #' . $id_order . ' is already being created', 'warning');
+
+			$this->redirectWithNotice($home, 'error', $this->module->l('A payment for this order is already being created. Please wait a moment and refresh the page.'));
+
+			return;
+		}
+
 		$api->set_config('store_rate', $this->module->getStoreRate((string) $currency->iso_code));
+
+		$converted = null;
 
 		try {
 			$converter = new AneePayUsdConverter($api);
 			$converted = $converter->convert($total, (string) $currency->iso_code);
 			$created   = $api->create_payment($converted['token_amount'], 'Order #' . $id_order);
 		} catch (Throwable $e) {
+			$kind = $e instanceof AneePayApiException ? $e->getKind() : AneePayApiException::KIND_REQUEST;
+
+			$api->write_log('payment', 'Payment creation failed for order #' . $id_order . ': ' . $e->getMessage(), 'error');
+
+			// The request may have reached AneePay before the connection died:
+			// adopt the payment it created instead of leaving an orphan behind.
+			if (is_array($converted) && in_array($kind, array(AneePayApiException::KIND_NETWORK, AneePayApiException::KIND_INVALID), true)) {
+				$found = $this->findCreatedPayment($api, 'Order #' . $id_order, (string) $converted['token_amount']);
+
+				if (null !== $found) {
+					$mapping = $this->storeMapping($order_model, $id_order, $cart, $api, $converted, $found, $total, $currency);
+
+					$this->context->cookie->__set('aneepay_order_id', $this->module->orderToken($id_order), time() + 3600);
+
+					$this->renderPending(array_merge(array('id_order' => $id_order), $mapping));
+
+					return;
+				}
+
+				$api->write_log('payment', 'Unknown outcome for order #' . $id_order . ' and no matching payment in the account list; the shopper may retry.', 'warning');
+			}
+
+			$order_model->releaseClaim($id_order);
+
 			// Compensate: the order exists but no payment does — cancel it and
 			// release the stock validateOrder() just reserved.
 			$cancelledState = (int) Configuration::get('ANEEPAY_CANCELLED_STATE');
@@ -122,15 +159,33 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 
 			// The shopper gets one short translated sentence; the technical
 			// reason stays in the request log.
-			$kind = $e instanceof AneePayApiException ? $e->getKind() : AneePayApiException::KIND_REQUEST;
-
-			$api->write_log('payment', 'Payment creation failed for order #' . $id_order . ': ' . $e->getMessage(), 'error');
-
 			$this->redirectWithNotice($home, 'error', $this->module->paymentErrorMessage($kind));
 
 			return;
 		}
 
+		$mapping = $this->storeMapping($order_model, $id_order, $cart, $api, $converted, $created, $total, $currency);
+
+		$this->context->cookie->__set('aneepay_order_id', $this->module->orderToken($id_order), time() + 3600);
+
+		$this->renderPending(array_merge(array('id_order' => $id_order), $mapping));
+	}
+
+	/**
+	 * Persist the payment mapping for an order.
+	 *
+	 * @param AneePayOrder $order_model
+	 * @param int          $id_order
+	 * @param Cart         $cart
+	 * @param AneePayApi   $api
+	 * @param array        $converted fiat -> USD -> token breakdown
+	 * @param array        $created   payment_id / operation_id / checkout_url
+	 * @param float        $total     order total in the store currency
+	 * @param Currency     $currency
+	 *
+	 * @return array The stored mapping, ready for renderPending()
+	 */
+	protected function storeMapping($order_model, $id_order, $cart, $api, $converted, $created, $total, $currency) {
 		$mapping = array(
 			'id_cart'        => (int) $cart->id,
 			'payment_id'     => $created['payment_id'],
@@ -150,9 +205,56 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 
 		$order_model->saveMapping($id_order, $mapping);
 
-		$this->context->cookie->__set('aneepay_order_id', $this->module->orderToken($id_order), time() + 3600);
+		return $mapping;
+	}
 
-		$this->renderPending(array_merge(array('id_order' => $id_order), $mapping));
+	/**
+	 * Find a payment that was created before the response was lost.
+	 *
+	 * The API has no Idempotency-Key, so a transport error or an unreadable
+	 * response leaves us not knowing whether POST /payments/ went through.
+	 * Looking the payment up in the account list (same amount, same order
+	 * reference, created in the last hour) is the only safe way to continue;
+	 * a blind retry would create a second payment.
+	 *
+	 * @param AneePayApi $api
+	 * @param string     $reference   e.g. "Order #42"
+	 * @param string     $token_amount
+	 *
+	 * @return array|null payment_id / operation_id / checkout_url
+	 */
+	protected function findCreatedPayment($api, $reference, $token_amount) {
+		$payments = $api->list_payments(gmdate('Y-m-d\TH:i:s\Z', time() - 3600));
+
+		if (!is_array($payments)) {
+			return null;
+		}
+
+		$expected = round((float) $token_amount, 2);
+
+		foreach ($payments as $row) {
+			if (!is_array($row) || empty($row['id']) || empty($row['operation_id']) || empty($row['checkout_url'])) {
+				continue;
+			}
+
+			if (!isset($row['amount']) || round((float) $row['amount'], 2) !== $expected) {
+				continue;
+			}
+
+			if (false === strpos((string) (isset($row['description']) ? $row['description'] : ''), $reference)) {
+				continue;
+			}
+
+			$api->write_log('payment', 'Adopted AneePay payment ' . $row['id'] . ' for ' . $reference . ' after an unknown create_payment() outcome.', 'warning');
+
+			return array(
+				'payment_id'   => (string) $row['id'],
+				'operation_id' => (string) $row['operation_id'],
+				'checkout_url' => (string) $row['checkout_url'],
+			);
+		}
+
+		return null;
 	}
 
 	protected function renderPending($row) {

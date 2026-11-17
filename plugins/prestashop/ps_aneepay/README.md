@@ -79,6 +79,11 @@ ps_aneepay/
   ID optional), fetches that payment from the API and applies its status right
   away — the manual fix for "the buyer paid but the order is still pending",
   since webhooks only ever deliver `success` and there is no replay endpoint.
+- One payment per order: a mapping row in the `creating` state locks the order
+  while the payment is created, so a duplicate tab or a double click cannot
+  start a second AneePay payment. If the API answer is lost (timeout, unreadable
+  body), the plugin adopts the payment found in the account list by amount and
+  order reference instead of retrying blind — there is no `Idempotency-Key`.
 - **Reconcile payments** reads the account payment list for the last 1–30 days,
   applies the status of every payment it can match to an order, and reports
   `checked` / `matched` / `updated` / `unmatched`. Use it when a webhook was lost

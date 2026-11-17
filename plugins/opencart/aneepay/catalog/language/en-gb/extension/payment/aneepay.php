@@ -28,3 +28,4 @@ $_['error_rate_limit']  = 'The payment service is busy. Please wait a minute and
 $_['error_server']      = 'The payment service is temporarily unavailable. Please try again in a moment.';
 $_['error_invalid']     = 'The payment service returned an unexpected response. Please try again.';
 $_['error_request']     = 'We could not create the payment for this order. Please return to your cart and try again.';
+$_['error_payment_in_progress'] = 'A payment for this order is already being created. Please wait a moment and refresh the page.';

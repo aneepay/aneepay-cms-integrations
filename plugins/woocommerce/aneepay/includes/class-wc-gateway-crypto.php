@@ -902,18 +902,65 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 			);
 		}
 
-		// Convert the order total (store currency) into the token amount.
-		$converter = new AneePay_USD_Converter( $this );
-		$converted = $converter->convert( $amount, $order->get_currency() );
+		// Creation lock: the API has no Idempotency-Key, so a second request for
+		// the same order (double click, two tabs, a retry raced by the poller)
+		// must not reach POST /payments/ while this one is in flight.
+		if ( ! aneepay_acquire_order_lock( $order_id ) ) {
+			throw new Exception(
+				__( 'A payment for this order is already being created. Please wait a moment and refresh the page.', 'aneepay-crypto-gateway' )
+			);
+		}
 
-		$token_amount = (string) number_format( $converted['token_amount'], 2, '.', '' );
+		$token_amount = '';
 
-		// If the API call fails/times out, the exception propagates and the
-		// order is left untouched (no meta, no status change) — it never
-		// looks "half-created".
-		$created = $this->api_handler->create_payment( $token_amount, $order );
+		try {
+			// Convert the order total (store currency) into the token amount.
+			$converter = new AneePay_USD_Converter( $this );
+			$converted = $converter->convert( $amount, $order->get_currency() );
 
-		$this->attach_payment_to_order( $order, $created, $converted, $token_amount, $amount );
+			$token_amount = (string) number_format( $converted['token_amount'], 2, '.', '' );
+
+			$created = $this->api_handler->create_payment( $token_amount, $order );
+		} catch ( Exception $e ) {
+			// A definite failure (HTTP error) created nothing: the order is left
+			// untouched and the shopper may retry. An unknown outcome may have
+			// created a payment, so look it up before giving up.
+			if ( '' !== $token_amount && $this->api_handler->create_outcome_unknown() ) {
+				$created = aneepay_find_created_payment( $order, $token_amount );
+
+				if ( null !== $created ) {
+					$converted = isset( $converted ) ? $converted : array();
+
+					return $this->complete_payment( $order, $created, $converted, $token_amount, $amount );
+				}
+
+				$this->api_handler->log(
+					'create_payment',
+					'Unknown outcome for order #' . $order_id . ' and no matching payment in the account list; the shopper may retry.',
+					'warning'
+				);
+			}
+
+			throw $e;
+		} finally {
+			aneepay_release_order_lock( $order_id );
+		}
+
+		return $this->complete_payment( $order, $created, $converted, $token_amount, $amount );
+	}
+
+	/**
+	 * Store the created payment on the order and send the buyer to checkout.
+	 *
+	 * @param WC_Order $order        Order object.
+	 * @param array    $created      Payment data (payment_id, operation_id, checkout_url).
+	 * @param array    $converted    Conversion result.
+	 * @param string   $token_amount Token amount string.
+	 * @param float    $order_total  Original store total.
+	 * @return array WooCommerce process_payment() result.
+	 */
+	protected function complete_payment( $order, $created, $converted, $token_amount, $order_total ) {
+		$this->attach_payment_to_order( $order, $created, $converted, $token_amount, $order_total );
 
 		$order->save();
 
@@ -926,7 +973,7 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 			)
 		);
 
-		wc_reduce_stock_levels( $order_id );
+		wc_reduce_stock_levels( $order->get_id() );
 
 		// Track the order so the store-side success/fail pages (configured in
 		// the AneePay panel as SUCCESS_URL / FAIL_URL) can identify it.
@@ -1698,6 +1745,117 @@ function aneepay_log_sync_error( $e ) {
 	if ( isset( $gateway->api_handler ) && is_callable( array( $gateway->api_handler, 'log' ) ) ) {
 		$gateway->api_handler->log( 'cron_sync', $e->getMessage(), 'error' );
 	}
+}
+
+/**
+ * Take the per-order payment-creation lock.
+ *
+ * The AneePay API has no Idempotency-Key, so two concurrent requests for the
+ * same order would create two payable invoices. Order meta cannot be claimed
+ * atomically, so the lock is a uniquely named row in the options table:
+ * INSERT IGNORE succeeds for exactly one request.
+ *
+ * @param int $order_id Order ID.
+ * @param int $ttl      Lock lifetime in seconds (a crashed request must not
+ *                      block the order forever).
+ * @return bool True when this request owns the lock.
+ */
+function aneepay_acquire_order_lock( $order_id, $ttl = 120 ) {
+	global $wpdb;
+
+	$name = 'aneepay_lock_' . absint( $order_id );
+	$now  = time();
+
+	// Drop a lock left behind by a request that never finished.
+	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value < %d", $name, $now ) );
+
+	$inserted = $wpdb->query(
+		$wpdb->prepare(
+			"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+			$name,
+			(string) ( $now + (int) $ttl )
+		)
+	);
+
+	wp_cache_delete( $name, 'options' );
+
+	return 1 === (int) $inserted;
+}
+
+/**
+ * Release the per-order payment-creation lock.
+ *
+ * @param int $order_id Order ID.
+ * @return void
+ */
+function aneepay_release_order_lock( $order_id ) {
+	global $wpdb;
+
+	$name = 'aneepay_lock_' . absint( $order_id );
+
+	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s", $name ) );
+
+	wp_cache_delete( $name, 'options' );
+}
+
+/**
+ * Look for a payment that a failed create_payment() call may have created.
+ *
+ * Only used when the outcome is unknown (transport error, unreadable 2xx
+ * body). The payment is matched by token amount and by the order reference in
+ * its description, so a concurrent payment of another order is never adopted.
+ *
+ * @param WC_Order $order        Order object.
+ * @param string   $token_amount Token amount that was sent to the API.
+ * @return array|null Normalised payment row, or null when nothing matches.
+ */
+function aneepay_find_created_payment( $order, $token_amount ) {
+	$gateway = new WC_Gateway_AneePay_Crypto();
+	$api     = $gateway->api_handler;
+
+	$rows = $api->list_payments( gmdate( 'Y-m-d\TH:i:s\Z', time() - HOUR_IN_SECONDS ) );
+
+	if ( ! is_array( $rows ) ) {
+		return null;
+	}
+
+	$reference = trim( (string) $order->get_order_number() );
+	$expected  = round( (float) $token_amount, 2 );
+
+	foreach ( $rows as $row ) {
+		if ( ! is_array( $row ) ) {
+			continue;
+		}
+
+		$payment_id   = isset( $row['id'] ) ? (string) $row['id'] : '';
+		$operation_id = isset( $row['operation_id'] ) ? (string) $row['operation_id'] : '';
+		$checkout_url = isset( $row['checkout_url'] ) ? (string) $row['checkout_url'] : '';
+
+		if ( '' === $payment_id || '' === $operation_id || '' === $checkout_url ) {
+			continue;
+		}
+
+		if ( ! isset( $row['amount'] ) || round( (float) $row['amount'], 2 ) !== $expected ) {
+			continue;
+		}
+
+		$description = isset( $row['description'] ) ? (string) $row['description'] : '';
+
+		if ( '' === $reference || false === strpos( $description, '#' . $reference ) ) {
+			continue;
+		}
+
+		$api->log( 'create_payment', 'Adopted AneePay payment ' . $payment_id . ' for order #' . $order->get_id() . ' after an unknown create_payment() outcome.', 'warning' );
+
+		return array(
+			'payment_id'   => $payment_id,
+			'operation_id' => $operation_id,
+			'checkout_url' => $checkout_url,
+			'status'       => isset( $row['status'] ) ? (string) $row['status'] : '',
+		);
+	}
+
+	return null;
 }
 
 /**
