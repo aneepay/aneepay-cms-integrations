@@ -66,6 +66,11 @@ $_['error_account_id']       = 'AneePay Account ID is required (valid UUID).';
 $_['error_webhook_secret']   = 'AneePay Webhook Secret is required to verify payment confirmations.';
 $_['error_exchange_rate']    = 'Manual Exchange Rate must be a positive number.';
 $_['error_site_domain']      = 'Origin domain must be a bare hostname, for example shop.example.com.';
+$_['error_pending_status_id']   = 'Choose the order status for an awaiting payment.';
+$_['error_paid_status_id']      = 'Choose the order status for a confirmed payment.';
+$_['error_failed_status_id']    = 'Choose the order status for a failed payment.';
+$_['error_cancelled_status_id'] = 'Choose the order status for a cancelled payment.';
+$_['error_status_duplicate']    = 'Each payment state needs its own order status.';
 $_['error_warning']          = 'Warning: Please check the form carefully for errors!';
 
 // Buttons / misc

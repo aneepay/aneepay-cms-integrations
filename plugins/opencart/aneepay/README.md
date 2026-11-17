@@ -56,6 +56,9 @@ install.xml                                            # ocmod manifest (add-on 
   order older than `Abandoned Payment Expiry` (default 120 minutes, `0` disables)
   is cancelled — or failed when no cancelled status is configured — once the API
   confirms the payment did not go through.
+- Order statuses: `pending`/`paid`/`failed`/`cancelled` default to the stock
+  OpenCart statuses (1/2/10/7); saving rejects an empty or duplicated status, so
+  a failed or cancelled payment always leaves an order history entry.
 - Cron is not built into OpenCart: add the cron URL above to your server crontab.
 - Uninstall keeps the `aneepay_order` / `aneepay_log` tables by default; set
   "On uninstall" to "Delete data" in the settings to drop them.

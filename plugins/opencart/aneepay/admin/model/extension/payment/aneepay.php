@@ -91,6 +91,54 @@ class ModelExtensionPaymentAneePay extends Model {
 		}
 
 		$this->createEventTable();
+
+		$this->ensureOrderStatusDefaults();
+	}
+
+	/**
+	 * Give the payment states a working default order status.
+	 *
+	 * A status of 0 records the payment mapping but adds no order history
+	 * entry, so a failed or cancelled payment would be invisible to the
+	 * merchant. OpenCart ships 1 = Pending, 2 = Processing, 7 = Canceled and
+	 * 10 = Failed; a store that removed them keeps the field empty and the
+	 * settings page refuses to save until the merchant picks one.
+	 *
+	 * @return void
+	 */
+	public function ensureOrderStatusDefaults() {
+		$defaults = array(
+			'pending_status_id'   => 1,
+			'paid_status_id'      => 2,
+			'failed_status_id'    => 10,
+			'cancelled_status_id' => 7,
+		);
+
+		foreach ($defaults as $field => $status_id) {
+			$key = 'payment_aneepay_' . $field;
+
+			if ('' !== (string) $this->config->get($key)) {
+				continue;
+			}
+
+			if (!$this->orderStatusExists($status_id)) {
+				continue;
+			}
+
+			$this->setSetting($key, (string) $status_id);
+		}
+	}
+
+	/**
+	 * Whether an order status exists in this store.
+	 *
+	 * @param int $status_id Order status id.
+	 * @return bool
+	 */
+	protected function orderStatusExists($status_id) {
+		$query = $this->db->query("SELECT `order_status_id` FROM `" . DB_PREFIX . "order_status` WHERE `order_status_id` = '" . (int) $status_id . "' LIMIT 1");
+
+		return (bool) $query->num_rows;
 	}
 
 	/**

@@ -228,6 +228,9 @@
                 {% endif %}
                 {% endfor %}
               </select>
+              {% if attribute(_context, 'error_' ~ field) %}
+              <div class="text-danger">{{ attribute(_context, 'error_' ~ field) }}</div>
+              {% endif %}
             </div>
           </div>
           {% endfor %}

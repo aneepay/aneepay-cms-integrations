@@ -49,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never expires an order. Every platform gained the matching `Expiry` setting.
 - The status poller reports counters (`checked`, `updated`, `expired`,
   `failed`) instead of a bare `ok`.
+- OpenCart gets working order-status defaults: `pending`/`paid`/`failed`/
+  `cancelled` fall back to the stock statuses (1/2/10/7) on install and on the
+  first settings page load, and saving rejects an empty or duplicated status, so
+  a failed or cancelled payment always leaves an order history entry.
 
 ### Changed
 

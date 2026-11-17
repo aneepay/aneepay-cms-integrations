@@ -58,6 +58,10 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			$data['error_warning'] = '';
 		}
 
+		foreach (array('pending_status_id', 'paid_status_id', 'failed_status_id', 'cancelled_status_id') as $field) {
+			$data['error_' . $field] = isset($this->error[$field]) ? $this->error[$field] : '';
+		}
+
 		$fields = array(
 			'status', 'title', 'description', 'account_id', 'webhook_secret', 'site_domain',
 			'test_mode', 'token', 'network', 'rate_source', 'exchange_rate',
@@ -108,6 +112,14 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 		if ('' == $data['payment_aneepay_paid_status_id']) {
 			$data['payment_aneepay_paid_status_id'] = 2;
+		}
+
+		if ('' == $data['payment_aneepay_failed_status_id']) {
+			$data['payment_aneepay_failed_status_id'] = 10;
+		}
+
+		if ('' == $data['payment_aneepay_cancelled_status_id']) {
+			$data['payment_aneepay_cancelled_status_id'] = 7;
 		}
 
 		$data['order_statuses'] = $this->model_localisation_order_status->getOrderStatuses();
@@ -231,6 +243,27 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		}
 
 		$this->request->post['payment_aneepay_site_domain'] = $site_domain;
+
+		// Every configured status must be a real, distinct order status: a
+		// status of 0 records the payment mapping but adds no order history
+		// entry, so the merchant never learns that a payment failed.
+		$seen_statuses = array();
+
+		foreach (array('pending_status_id', 'paid_status_id', 'failed_status_id', 'cancelled_status_id') as $field) {
+			$status_id = (int) ($this->request->post['payment_aneepay_' . $field] ?? 0);
+
+			if ($status_id <= 0) {
+				$this->error[$field] = $this->language->get('error_' . $field);
+			} elseif (in_array($status_id, $seen_statuses, true)) {
+				$this->error[$field] = $this->language->get('error_status_duplicate');
+			}
+
+			if ($status_id > 0) {
+				$seen_statuses[] = $status_id;
+			}
+
+			$this->request->post['payment_aneepay_' . $field] = $status_id;
+		}
 
 		if ($this->error) {
 			$this->error['warning'] = $this->language->get('error_warning');
