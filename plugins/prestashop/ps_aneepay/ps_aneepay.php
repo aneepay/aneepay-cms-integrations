@@ -8,6 +8,7 @@ if (!defined('_PS_VERSION_')) {
 	exit;
 }
 
+require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayApiException.php';
 require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayApi.php';
 require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayUsdConverter.php';
 require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayOrder.php';
@@ -935,6 +936,37 @@ class Ps_Aneepay extends PaymentModule {
 	 */
 	public function moduleLink($controller) {
 		return $this->context->link->getModuleLink($this->name, $controller, array(), true);
+	}
+
+	/**
+	 * Customer-facing sentence for a failed payment creation.
+	 *
+	 * The technical reason (status code, problem+json body) is written to the
+	 * request log; the shopper only sees this short, translated sentence.
+	 * The literals live in translations/*.php for the PrestaShop translator.
+	 *
+	 * @param string $kind Failure kind from AneePayApiException.
+	 *
+	 * @return string
+	 */
+	public function paymentErrorMessage($kind)
+	{
+		switch ($kind) {
+			case AneePayApiException::KIND_CONFIG:
+				return $this->l('Payments are not available right now. Please try again later or choose another payment method.');
+			case AneePayApiException::KIND_NETWORK:
+				return $this->l('We could not reach the payment service. Please try again in a moment.');
+			case AneePayApiException::KIND_AUTH:
+				return $this->l('Payments are temporarily unavailable. Please try again later.');
+			case AneePayApiException::KIND_RATE_LIMIT:
+				return $this->l('The payment service is busy. Please wait a minute and try again.');
+			case AneePayApiException::KIND_SERVER:
+				return $this->l('The payment service is temporarily unavailable. Please try again in a moment.');
+			case AneePayApiException::KIND_INVALID:
+				return $this->l('The payment service returned an unexpected response. Please try again.');
+			default:
+				return $this->l('We could not create the payment for this order. Please return to your cart and try again.');
+		}
 	}
 
 	/**

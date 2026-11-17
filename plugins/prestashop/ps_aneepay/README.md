@@ -14,6 +14,7 @@ ps_aneepay/
     AneePayOrder.php                  (ps_aneepay_order mapping)
     AneePayWebhook.php                (resolve order + apply OrderHistory)
     AneePayEventLog.php               (webhook dedup by event_id + is_sandbox guard)
+    AneePayApiException.php           (typed API failures -> shopper-safe messages)
   controllers/front/
     payment.php    (CSRF token gate + validateOrder + redirect to checkout_url)
     webhook.php    (STATUS_URL — HMAC verify, fail-closed)
@@ -22,6 +23,7 @@ ps_aneepay/
     check.php      (AJAX "I already paid" / polling)
   views/templates/front/result.tpl
   views/templates/front/error.tpl     (expired/invalid payment session)
+  translations/en.php                 (shopper-facing messages; template for other locales)
   logo.png
   index.php                           (in every folder — PS requirement)
 ```

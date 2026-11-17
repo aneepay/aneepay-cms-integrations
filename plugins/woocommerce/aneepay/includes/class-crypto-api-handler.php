@@ -178,7 +178,9 @@ class AneePay_Crypto_API_Handler {
 		$account_id = $this->get_account_id();
 
 		if ( '' === $account_id ) {
-			throw new RuntimeException( __( 'AneePay Account ID is not configured. Please set it in the gateway settings.', 'aneepay-crypto-gateway' ) );
+			$this->log( 'create_payment', 'Account ID is not configured', 'error' );
+
+			throw new RuntimeException( $this->customer_error_message( 'config' ) );
 		}
 
 		$amount = round( (float) $amount, 2 );
@@ -220,7 +222,7 @@ class AneePay_Crypto_API_Handler {
 	protected function parse_create_response( $response ) {
 		if ( is_wp_error( $response ) ) {
 			$this->log( 'create_payment', $response->get_error_message(), 'error' );
-			throw new RuntimeException( __( 'Unable to connect to the AneePay payment service.', 'aneepay-crypto-gateway' ) );
+			throw new RuntimeException( $this->customer_error_message( 'network' ) );
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
@@ -229,15 +231,20 @@ class AneePay_Crypto_API_Handler {
 		$this->log( 'create_payment', 'HTTP ' . $code );
 
 		if ( 200 !== $code && 201 !== $code ) {
-			$this->log( 'create_payment', 'Unexpected status, body: ' . $body, 'error' );
-			throw new RuntimeException( $this->extract_error_message( $code, $body ) );
+			$this->log(
+				'create_payment',
+				'API error: ' . $this->extract_error_message( $code, $body ) . ' body: ' . $body,
+				'error'
+			);
+
+			throw new RuntimeException( $this->customer_error_message( $this->classify_http_status( $code ) ) );
 		}
 
 		$json = json_decode( $body, true, 512, JSON_BIGINT_AS_STRING );
 
 		if ( ! is_array( $json ) ) {
 			$this->log( 'create_payment', 'Invalid JSON response: ' . $body, 'error' );
-			throw new RuntimeException( __( 'AneePay returned an invalid response.', 'aneepay-crypto-gateway' ) );
+			throw new RuntimeException( $this->customer_error_message( 'invalid' ) );
 		}
 
 		$payment_id   = isset( $json['id'] ) ? sanitize_text_field( (string) $json['id'] ) : '';
@@ -247,7 +254,7 @@ class AneePay_Crypto_API_Handler {
 
 		if ( empty( $payment_id ) || empty( $operation_id ) || empty( $checkout_url ) ) {
 			$this->log( 'create_payment', 'Missing required fields in response: ' . $body, 'error' );
-			throw new RuntimeException( __( 'AneePay did not return a valid checkout URL.', 'aneepay-crypto-gateway' ) );
+			throw new RuntimeException( $this->customer_error_message( 'invalid' ) );
 		}
 
 		return array(
@@ -306,11 +313,64 @@ class AneePay_Crypto_API_Handler {
 			}
 		}
 
-		return sprintf(
-			/* translators: %d: HTTP status code */
-			__( 'AneePay returned an unexpected response (HTTP %d).', 'aneepay-crypto-gateway' ),
-			$code
-		);
+		return sprintf( 'AneePay returned an unexpected response (HTTP %d).', $code );
+	}
+
+	/**
+	 * Customer-facing message for a failed API interaction.
+	 *
+	 * Technical details (status code, problem+json body) stay in the request
+	 * log: the shopper only sees a short, actionable sentence.
+	 *
+	 * @param string $kind Failure kind from classify_http_status() / the caller.
+	 * @return string
+	 */
+	public function customer_error_message( $kind ) {
+		switch ( $kind ) {
+			case 'config':
+				return __( 'Payments are not available right now. Please try again later or choose another payment method.', 'aneepay-crypto-gateway' );
+			case 'network':
+				return __( 'We could not reach the payment service. Please try again in a moment.', 'aneepay-crypto-gateway' );
+			case 'auth':
+				return __( 'Payments are temporarily unavailable. Please try again later.', 'aneepay-crypto-gateway' );
+			case 'rate_limit':
+				return __( 'The payment service is busy. Please wait a minute and try again.', 'aneepay-crypto-gateway' );
+			case 'server':
+				return __( 'The payment service is temporarily unavailable. Please try again in a moment.', 'aneepay-crypto-gateway' );
+			case 'invalid':
+				return __( 'The payment service returned an unexpected response. Please try again.', 'aneepay-crypto-gateway' );
+			case 'request':
+			default:
+				return __( 'We could not create the payment for this order. Please return to your cart and try again.', 'aneepay-crypto-gateway' );
+		}
+	}
+
+	/**
+	 * Classify an HTTP status into a customer-facing failure kind.
+	 *
+	 * @param int $code HTTP status code.
+	 * @return string
+	 */
+	public function classify_http_status( $code ) {
+		$code = (int) $code;
+
+		if ( 401 === $code || 403 === $code ) {
+			return 'auth';
+		}
+
+		if ( 429 === $code ) {
+			return 'rate_limit';
+		}
+
+		if ( $code >= 500 || $code <= 0 ) {
+			return 'server';
+		}
+
+		if ( $code >= 400 ) {
+			return 'request';
+		}
+
+		return 'server';
 	}
 
 	/**

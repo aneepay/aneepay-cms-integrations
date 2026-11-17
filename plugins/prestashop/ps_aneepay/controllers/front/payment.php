@@ -120,7 +120,13 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 			AneePayWebhook::restoreOrderStockIfNeeded($id_order, $cancelledState, $previous_state);
 			$order_model->markStockRestored($id_order);
 
-			$this->redirectWithNotice($home, 'error', $e->getMessage());
+			// The shopper gets one short translated sentence; the technical
+			// reason stays in the request log.
+			$kind = $e instanceof AneePayApiException ? $e->getKind() : AneePayApiException::KIND_REQUEST;
+
+			$api->write_log('payment', 'Payment creation failed for order #' . $id_order . ': ' . $e->getMessage(), 'error');
+
+			$this->redirectWithNotice($home, 'error', $this->module->paymentErrorMessage($kind));
 
 			return;
 		}

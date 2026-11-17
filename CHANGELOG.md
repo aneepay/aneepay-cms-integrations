@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creating an order, so a bare GET can no longer spam orders into a buyer's
   session. Invalid entries answer 403, and at most 5 payment attempts per
   10 minutes are accepted.
+- Shopper-facing payment errors are translated strings instead of API text:
+  technical details (HTTP code, `problem+json` body, transport errors) go to
+  the log only. The messages live in language files — WooCommerce `.pot`
+  (`languages/`), OpenCart `error_*` keys, PrestaShop `translations/en.php`;
+  each plugin maps the failure to `config`, `network`, `auth`, `rate_limit`,
+  `request`, `server` or `invalid`.
 
 ### Changed
 

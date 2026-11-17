@@ -20,6 +20,7 @@ aneepay/
   system/library/aneepay/usd-converter.php             # fiat -> USD -> token
   system/library/aneepay/webhook.php                   # resolve order + apply status
   system/library/aneepay/event-log.php                 # webhook dedup by event_id + is_sandbox guard
+  system/library/aneepay/api-exception.php             # typed API failures -> shopper-safe messages
 install.xml                                            # ocmod manifest (add-on files)
 ```
 

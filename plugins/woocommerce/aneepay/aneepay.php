@@ -81,6 +81,8 @@ function aneepay_add_gateway( $methods ) {
  * @return void
  */
 function aneepay_load_gateway_class() {
+	load_plugin_textdomain( 'aneepay-crypto-gateway', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+
 	if ( ! class_exists( 'WooCommerce' ) || ! class_exists( 'WC_Payment_Gateway' ) ) {
 		return;
 	}

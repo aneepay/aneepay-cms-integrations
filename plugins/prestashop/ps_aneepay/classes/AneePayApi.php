@@ -92,7 +92,7 @@ class AneePayApi {
 		$account_id = $this->get_account_id();
 
 		if ('' === $account_id) {
-			throw new Exception('AneePay Account ID is not configured.');
+			throw new AneePayApiException('AneePay Account ID is not configured.', AneePayApiException::KIND_CONFIG);
 		}
 
 		$amount = number_format((float) $amount, 2, '.', '');
@@ -113,7 +113,7 @@ class AneePayApi {
 		$status       = isset($json['status']) ? (string) $json['status'] : '';
 
 		if ('' === $payment_id || '' === $operation_id || '' === $checkout_url) {
-			throw new Exception('AneePay did not return a valid checkout URL.');
+			throw new AneePayApiException('AneePay did not return a valid checkout URL.', AneePayApiException::KIND_INVALID);
 		}
 
 		return array(
@@ -340,19 +340,19 @@ class AneePayApi {
 	/** @return array @throws Exception */
 	protected function decode_response($response, $ok_code) {
 		if ('' !== (string) $response['error']) {
-			throw new Exception('Unable to connect to the AneePay payment service: ' . $response['error']);
+			throw new AneePayApiException('Unable to connect to the AneePay payment service: ' . $response['error'], AneePayApiException::KIND_NETWORK);
 		}
 
 		$code = (int) $response['code'];
 
 		if ($code !== $ok_code) {
-			throw new Exception($this->extract_error_message($code, (string) $response['body']));
+			throw new AneePayApiException($this->extract_error_message($code, (string) $response['body']), AneePayApiException::kindFromHttp($code), $code);
 		}
 
 		$data = $this->json((string) $response['body']);
 
 		if (null === $data) {
-			throw new Exception('AneePay returned an invalid response.');
+			throw new AneePayApiException('AneePay returned an invalid response.', AneePayApiException::KIND_INVALID);
 		}
 
 		return $data;

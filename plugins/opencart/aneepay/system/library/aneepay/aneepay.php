@@ -6,6 +6,8 @@
  * records a ring-buffer request log (oc_aneepay_log) and provides the
  * HMAC-SHA256 webhook signature verification.
  */
+require_once __DIR__ . '/api-exception.php';
+
 class AneePay_Client {
 	const API_BASE = 'https://api.aneepay.com';
 
@@ -159,7 +161,7 @@ class AneePay_Client {
 		$account_id = $this->get_account_id();
 
 		if ('' === $account_id) {
-			throw new Exception('AneePay Account ID is not configured.');
+			throw new AneePay_Api_Exception('AneePay Account ID is not configured.', AneePay_Api_Exception::KIND_CONFIG);
 		}
 
 		$amount = number_format((float) $amount, 2, '.', '');
@@ -181,7 +183,7 @@ class AneePay_Client {
 		$status       = isset($json['status']) ? (string) $json['status'] : '';
 
 		if ('' === $payment_id || '' === $operation_id || '' === $checkout_url) {
-			throw new Exception('AneePay did not return a valid checkout URL.');
+			throw new AneePay_Api_Exception('AneePay did not return a valid checkout URL.', AneePay_Api_Exception::KIND_INVALID);
 		}
 
 		return array(
@@ -373,19 +375,19 @@ class AneePay_Client {
 	 */
 	protected function decode_response($response, $ok_code) {
 		if ('' !== (string) $response['error']) {
-			throw new Exception('Unable to connect to the AneePay payment service: ' . $response['error']);
+			throw new AneePay_Api_Exception('Unable to connect to the AneePay payment service: ' . $response['error'], AneePay_Api_Exception::KIND_NETWORK);
 		}
 
 		$code = (int) $response['code'];
 
 		if ($code !== $ok_code) {
-			throw new Exception($this->extract_error_message($code, (string) $response['body']));
+			throw new AneePay_Api_Exception($this->extract_error_message($code, (string) $response['body']), AneePay_Api_Exception::kind_from_http($code), $code);
 		}
 
 		$data = $this->json((string) $response['body']);
 
 		if (null === $data) {
-			throw new Exception('AneePay returned an invalid response.');
+			throw new AneePay_Api_Exception('AneePay returned an invalid response.', AneePay_Api_Exception::KIND_INVALID);
 		}
 
 		return $data;

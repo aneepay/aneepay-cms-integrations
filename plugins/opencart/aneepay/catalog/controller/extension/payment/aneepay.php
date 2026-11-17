@@ -153,8 +153,15 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 			$this->response->redirect((string) $created['checkout_url']);
 		} catch (Exception $e) {
-			// The order is left untouched; surface the error and return to checkout.
-			$this->session->data['error_warning'] = $e->getMessage();
+			// The order is left untouched. The shopper sees one short translated
+			// sentence; the technical reason stays in the request log.
+			$client->write_log('confirm', 'Payment creation failed: ' . $e->getMessage(), 'error');
+
+			$kind = $e instanceof AneePay_Api_Exception ? $e->get_kind() : AneePay_Api_Exception::KIND_REQUEST;
+			$key  = 'error_' . $kind;
+			$text = $this->language->get($key);
+
+			$this->session->data['error_warning'] = ($text === $key) ? $this->language->get('error_request') : $text;
 
 			$this->response->redirect($this->url->link('checkout/confirm', '', true));
 		}
