@@ -187,6 +187,7 @@
             <div class="col-sm-10">
               <input type="text" name="payment_aneepay_exchange_rate" value="{{ payment_aneepay_exchange_rate }}" id="input-exchange-rate" class="form-control" step="0.000001" />
               {% if error_exchange_rate %}<div class="text-danger">{{ error_exchange_rate }}</div>{% endif %}
+              {% if rate_warning %}<div class="alert alert-warning" style="margin-top:10px">{{ rate_warning }}</div>{% endif %}
             </div>
           </div>
           <div class="form-group">

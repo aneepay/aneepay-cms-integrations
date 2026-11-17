@@ -8,8 +8,33 @@
  *
  * Rate priority: Frankfurter/ECB (cached) -> store Currency -> manual rate.
  * If none are available an exception is thrown — the amount is never guessed.
+ *
+ * Currencies without an ECB reference rate (RUB, for example) skip the network
+ * call on purpose and use the store rate; the settings page warns the merchant.
  */
 class AneePayUsdConverter {
+	/**
+	 * Currencies with an ECB reference rate (the set served by Frankfurter).
+	 *
+	 * Update the list if the ECB changes what it publishes.
+	 */
+	const ECB_CURRENCIES = array(
+		'AUD', 'BGN', 'BRL', 'CAD', 'CHF', 'CNY', 'CZK', 'DKK', 'EUR', 'GBP',
+		'HKD', 'HUF', 'IDR', 'ILS', 'INR', 'ISK', 'JPY', 'KRW', 'MXN', 'MYR',
+		'NOK', 'NZD', 'PHP', 'PLN', 'RON', 'SEK', 'SGD', 'THB', 'TRY', 'USD',
+		'ZAR',
+	);
+
+	/**
+	 * Whether the ECB publishes a reference rate for the currency.
+	 *
+	 * @param string $currency Currency code.
+	 * @return bool
+	 */
+	public static function isEcbCurrency($currency) {
+		return in_array(strtoupper(trim((string) $currency)), self::ECB_CURRENCIES, true);
+	}
+
 	/** @var AneePayApi */
 	protected $client;
 
@@ -45,7 +70,7 @@ class AneePayUsdConverter {
 			return 1.0;
 		}
 
-		if ($this->is_auto_enabled()) {
+		if ($this->is_auto_enabled() && self::isEcbCurrency($currency)) {
 			$rate = $this->fetch_auto_rate($currency);
 
 			if (null !== $rate) {
@@ -88,7 +113,7 @@ class AneePayUsdConverter {
 			return 1.0;
 		}
 
-		if ($this->is_auto_enabled()) {
+		if ($this->is_auto_enabled() && self::isEcbCurrency($currency)) {
 			$rate = $this->read_cached_rate($currency);
 
 			if (null !== $rate) {
@@ -133,7 +158,11 @@ class AneePayUsdConverter {
 		$rate   = $this->get_fiat_per_usd($currency, $source);
 
 		if (null === $rate || $rate <= 0) {
-			throw new Exception('Unable to resolve a USD exchange rate. Set a manual rate in the AneePay settings.');
+			throw new Exception('Unable to resolve a USD exchange rate for ' . $currency . '. Set a manual rate in the AneePay settings.');
+		}
+
+		if ('auto' !== $source && $this->is_auto_enabled() && !self::isEcbCurrency($currency)) {
+			$this->warnFallback($currency, $source, $rate);
 		}
 
 		$usd_amount  = $store_total / $rate;
@@ -146,6 +175,41 @@ class AneePayUsdConverter {
 			'currency'     => $currency,
 			'source'       => $source,
 		);
+	}
+
+	/**
+	 * Log that the automatic source is unusable for this currency, once an hour.
+	 *
+	 * The settings page carries the standing warning; this is traceability for
+	 * the orders that were converted with a fallback rate.
+	 *
+	 * @param string $currency Currency code.
+	 * @param string $source   Resolved source: store|manual.
+	 * @param float  $rate     Resolved units of store currency per 1 USD.
+	 * @return void
+	 */
+	protected function warnFallback($currency, $source, $rate) {
+		$marker = _PS_CACHE_DIR_ . 'aneepay_ratewarn_' . strtolower((string) $currency) . '.json';
+
+		if (is_file($marker) && (time() - (int) filemtime($marker)) < 3600) {
+			return;
+		}
+
+		@file_put_contents($marker, json_encode(array('time' => time())));
+
+		if (method_exists($this->client, 'write_log')) {
+			$this->client->write_log(
+				'rate',
+				sprintf(
+					'%s has no ECB reference rate; using the %s rate (1 USD = %s %s).',
+					$currency,
+					$source,
+					$rate,
+					$currency
+				),
+				'warning'
+			);
+		}
 	}
 
 	/**

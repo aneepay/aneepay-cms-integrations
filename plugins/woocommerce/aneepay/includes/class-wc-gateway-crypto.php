@@ -178,7 +178,7 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 			'rate_source' => array(
 				'title'       => __( 'Exchange Rate Source', 'aneepay-crypto-gateway' ),
 				'type'        => 'select',
-				'description' => __( 'How the store currency is converted to USD. Auto uses the live Frankfurter (ECB) rate and falls back to the manual rate below.', 'aneepay-crypto-gateway' ),
+				'description' => $this->rate_source_description(),
 				'default'     => 'auto',
 				'desc_tip'    => true,
 				'options'     => array(
@@ -243,6 +243,47 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 				'type' => 'sectionend',
 				'id'   => 'aneepay_section_advanced',
 			),
+		);
+	}
+
+	/**
+	 * Description of the rate source field.
+	 *
+	 * The ECB does not publish every currency, and the automatic source only
+	 * covers the currencies it does publish. When the store currency is outside
+	 * that set the checkout depends on the manual rate, so the warning is part
+	 * of the settings rather than a surprise at the checkout.
+	 *
+	 * Reads the saved settings directly: init_form_fields() runs before
+	 * init_settings() in the constructor, so get_option() is not usable here.
+	 *
+	 * @return string
+	 */
+	protected function rate_source_description() {
+		$description = __( 'How the store currency is converted to USD. Auto uses the live Frankfurter (ECB) rate and falls back to the manual rate below.', 'aneepay-crypto-gateway' );
+
+		$settings = (array) get_option( $this->get_option_key(), array() );
+
+		$rate_source = isset( $settings['rate_source'] ) ? (string) $settings['rate_source'] : 'auto';
+		$manual_rate = isset( $settings['exchange_rate'] ) ? (float) $settings['exchange_rate'] : 0.0;
+		$currency    = strtoupper( (string) get_woocommerce_currency() );
+
+		if ( 'manual' === $rate_source || AneePay_USD_Converter::is_ecb_currency( $currency ) ) {
+			return $description;
+		}
+
+		if ( $manual_rate > 0 ) {
+			return $description . ' ' . sprintf(
+				/* translators: %s: store currency code. */
+				__( 'Note: your store currency (%s) has no ECB reference rate, so the manual rate below is used. Keep it up to date.', 'aneepay-crypto-gateway' ),
+				$currency
+			);
+		}
+
+		return $description . ' ' . sprintf(
+			/* translators: %s: store currency code. */
+			__( 'Warning: your store currency (%s) has no ECB reference rate and no manual rate is set, so shoppers cannot start a payment. Set the manual exchange rate below.', 'aneepay-crypto-gateway' ),
+			$currency
 		);
 	}
 

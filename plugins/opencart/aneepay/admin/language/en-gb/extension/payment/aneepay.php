@@ -58,6 +58,8 @@ $_['help_test_mode']        = 'When enabled, payments are created on the Amoy te
 $_['help_exchange_rate']    = 'Used when the auto rate is unavailable. How many units of store currency make one token (≈1 USD).';
 $_['help_cron_interval']    = 'How often to poll AneePay for pending orders. Set it up in your cron as shown below.';
 $_['help_expiry_minutes']   = 'Pending orders older than this are cancelled by the cron job once the API confirms the payment did not go through. Set 0 to disable. Default: 120.';
+$_['help_rate_fallback_store']  = 'The store currency (%s) has no ECB reference rate, so the auto rate is skipped and the store currency rate is used. Keep the store rates up to date.';
+$_['help_rate_fallback_manual'] = 'The store currency (%s) has no ECB reference rate, so the auto rate is skipped and the manual rate is used.';
 $_['help_keep_data']        = 'Keep AneePay orders and request logs in the database when the extension is uninstalled. Disable to delete them.';
 
 // Errors

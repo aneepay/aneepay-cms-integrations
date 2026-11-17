@@ -796,6 +796,37 @@ class Ps_Aneepay extends PaymentModule {
 		return $this->displayConfirmation($this->l('Settings updated.'));
 	}
 
+	/**
+	 * Description of the exchange-rate-source field.
+	 *
+	 * Warns when the store currency has no ECB reference rate: the automatic
+	 * source is skipped on purpose and the store rate is used instead.
+	 *
+	 * @return string
+	 */
+	protected function rateSourceDescription() {
+		$description = $this->l('Auto uses the live Frankfurter (ECB) rate and falls back to the store rate, then the manual rate.');
+
+		$currency = new Currency((int) Configuration::get('PS_CURRENCY_DEFAULT'));
+		$iso      = $currency && $currency->iso_code ? strtoupper((string) $currency->iso_code) : '';
+
+		if ('' === $iso
+			|| 'manual' === (string) Configuration::get('ANEEPAY_RATE_SOURCE')
+			|| AneePayUsdConverter::isEcbCurrency($iso)
+		) {
+			return $description;
+		}
+
+		$manual = trim((string) Configuration::get('ANEEPAY_EXCHANGE_RATE'));
+
+		return $description . ' ' . sprintf(
+			'' !== $manual && (float) $manual > 0
+				? $this->l('The store currency (%s) has no ECB reference rate, so the manual rate is used.')
+				: $this->l('The store currency (%s) has no ECB reference rate, so the store currency rate is used. Keep the store rates up to date.'),
+			$iso
+		);
+	}
+
 	protected function renderForm() {
 		$fields = array();
 
@@ -899,6 +930,7 @@ class Ps_Aneepay extends PaymentModule {
 					'type'     => 'select',
 					'label'    => $this->l('Exchange Rate Source'),
 					'name'     => 'ANEEPAY_RATE_SOURCE',
+					'desc'     => $this->rateSourceDescription(),
 					'options'  => array(
 						'query' => array(
 							array('id' => 'auto',   'name' => 'Auto (Frankfurter/ECB) + manual fallback'),

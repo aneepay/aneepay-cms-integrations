@@ -53,6 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cancelled` fall back to the stock statuses (1/2/10/7) on install and on the
   first settings page load, and saving rejects an empty or duplicated status, so
   a failed or cancelled payment always leaves an order history entry.
+- Currencies without an ECB reference rate (RUB, UAH and others) get an explicit
+  fallback: the Frankfurter request is skipped instead of retried on every
+  conversion, the settings page warns that the store or manual rate is used, and
+  a `warning` is logged once an hour. The stored `rate_source` records which
+  rate was applied, and the conversion error now names the currency.
 
 ### Changed
 

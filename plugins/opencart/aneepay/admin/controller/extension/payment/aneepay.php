@@ -140,6 +140,12 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'manual' => $this->language->get('text_manual'),
 		);
 
+		$data['rate_warning'] = $this->rate_warning(
+			(string) $data['payment_aneepay_rate_source'],
+			(string) $this->config->get('config_currency'),
+			(string) $data['payment_aneepay_exchange_rate']
+		);
+
 		$data['cron_options'] = array(
 			'every_five_minutes'    => 'Every 5 minutes',
 			'every_ten_minutes'     => 'Every 10 minutes',
@@ -281,6 +287,35 @@ class ControllerExtensionPaymentAneePay extends Controller {
 	 */
 	protected function is_uuid($id) {
 		return (bool) preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', trim((string) $id));
+	}
+
+	/**
+	 * Warning shown next to the rate settings when the store currency has no
+	 * ECB reference rate.
+	 *
+	 * The automatic source only covers the currencies the ECB publishes; for
+	 * anything else the plugin deliberately skips the request and uses the
+	 * store rate, so the merchant should know which rate is in play.
+	 *
+	 * @param string $rate_source   Configured rate source (auto|manual).
+	 * @param string $currency_code Store currency code.
+	 * @param string $manual_rate   Configured manual rate.
+	 * @return string Empty when there is nothing to warn about.
+	 */
+	protected function rate_warning($rate_source, $currency_code, $manual_rate) {
+		$currency_code = strtoupper(trim((string) $currency_code));
+
+		if (!class_exists('AneePay_Usd_Converter')) {
+			require_once DIR_SYSTEM . 'library/aneepay/usd-converter.php';
+		}
+
+		if ('manual' === $rate_source || AneePay_Usd_Converter::is_ecb_currency($currency_code)) {
+			return '';
+		}
+
+		$key = (float) $manual_rate > 0 ? 'help_rate_fallback_manual' : 'help_rate_fallback_store';
+
+		return sprintf((string) $this->language->get($key), $currency_code);
 	}
 
 	/**

@@ -53,6 +53,10 @@ ps_aneepay/
   The rate and token amount are fixed when the payment is created; the checkout
   breakdown is an estimate and says so, while the pending and result screens
   show the fixed amount that was charged.
+- Only ECB currencies convert automatically: for others (RUB, UAH and so on) the
+  Frankfurter request is skipped and the store `Currency` rate, then the manual
+  rate, is used. The settings page warns about it, a `warning` is logged once an
+  hour, and `rate_source` in the mapping records which rate was applied.
 - Order metadata is stored in the `ps_aneepay_order` table; the webhook resolves
   the order by `payment_id` / `operation_id` (128-bit int, kept exact) or `#N`.
 - Webhook deliveries are deduplicated in the `ps_aneepay_event` table by

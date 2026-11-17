@@ -61,3 +61,24 @@ msgid ""
 "This amount is an estimate: the rate is fixed when you start the payment, "
 "so it can change slightly until then."
 msgstr ""
+
+#. Warning in the rate source field: the store currency has a manual fallback.
+#: includes/class-wc-gateway-crypto.php
+msgid ""
+"Note: your store currency (%s) has no ECB reference rate, so the manual rate "
+"below is used. Keep it up to date."
+msgstr ""
+
+#. Warning in the rate source field: no ECB rate and no manual fallback.
+#: includes/class-wc-gateway-crypto.php
+msgid ""
+"Warning: your store currency (%s) has no ECB reference rate and no manual "
+"rate is set, so shoppers cannot start a payment. Set the manual exchange "
+"rate below."
+msgstr ""
+
+#: includes/class-usd-converter.php
+msgid ""
+"Unable to resolve a USD exchange rate for %s. Set a manual exchange rate in "
+"the AneePay settings."
+msgstr ""
