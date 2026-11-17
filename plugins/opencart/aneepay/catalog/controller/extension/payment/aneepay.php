@@ -189,26 +189,12 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 			$created = $client->create_payment($converted['token_amount'], 'Order #' . $order_id);
 
-			$this->model_extension_payment_aneepay->addMapping($order_id, array(
-				'payment_id'     => $created['payment_id'],
-				'operation_id'   => $created['operation_id'],
-				'checkout_url'   => $created['checkout_url'],
-				'token'          => $client->get_token(),
-				'network'        => $client->get_network(),
-				'sandbox'        => $client->is_sandbox() ? 1 : 0,
-				'payment_status' => 'pending',
-				'token_amount'   => number_format((float) $converted['token_amount'], 2, '.', ''),
-				'order_currency' => (string) $order_info['currency_code'],
-				'order_total'    => (string) $order_info['total'],
-				'usd_amount'     => number_format((float) $converted['usd_amount'], 2, '.', ''),
-				'fiat_per_usd'   => (string) $converted['fiat_per_usd'],
-				'rate_source'    => (string) $converted['source'],
-			));
+			$stored = $this->store_mapping($client, $order_id, $order_info, $converted, $created, $token_amount);
 
 			$pending_status = (int) $this->config->get('payment_aneepay_pending_status_id');
 			$pending_status = $pending_status ? $pending_status : 1;
 
-			$this->model_checkout_order->addOrderHistory($order_id, $pending_status, $this->language->get('text_pending'), true);
+			$this->model_checkout_order->addOrderHistory($order_id, $pending_status, $this->pending_note($stored, $created['payment_id']), true);
 
 			$this->session->data['aneepay_order'] = $order_id;
 
@@ -225,26 +211,12 @@ class ControllerExtensionPaymentAneePay extends Controller {
 				$found = $this->find_created_payment($client, '#' . $order_id, $token_amount);
 
 				if (null !== $found) {
-					$this->model_extension_payment_aneepay->addMapping($order_id, array(
-						'payment_id'     => $found['payment_id'],
-						'operation_id'   => $found['operation_id'],
-						'checkout_url'   => $found['checkout_url'],
-						'token'          => $client->get_token(),
-						'network'        => $client->get_network(),
-						'sandbox'        => $client->is_sandbox() ? 1 : 0,
-						'payment_status' => 'pending',
-						'token_amount'   => number_format((float) $token_amount, 2, '.', ''),
-						'order_currency' => (string) $order_info['currency_code'],
-						'order_total'    => (string) $order_info['total'],
-						'usd_amount'     => number_format((float) $converted['usd_amount'], 2, '.', ''),
-						'fiat_per_usd'   => (string) $converted['fiat_per_usd'],
-						'rate_source'    => (string) $converted['source'],
-					));
+					$stored = $this->store_mapping($client, $order_id, $order_info, $converted, $found, $token_amount);
 
 					$pending_status = (int) $this->config->get('payment_aneepay_pending_status_id');
 					$pending_status = $pending_status ? $pending_status : 1;
 
-					$this->model_checkout_order->addOrderHistory($order_id, $pending_status, $this->language->get('text_pending'), true);
+					$this->model_checkout_order->addOrderHistory($order_id, $pending_status, $this->pending_note($stored, $found['payment_id']), true);
 
 					$this->session->data['aneepay_order'] = $order_id;
 
@@ -740,6 +712,60 @@ class ControllerExtensionPaymentAneePay extends Controller {
 	 * @param string         $token_amount Token amount sent to the API.
 	 * @return array|null
 	 */
+	/**
+	 * Store the created payment on the order.
+	 *
+	 * The payment already exists at AneePay, so a storage failure must never
+	 * cancel the order or hide the checkout URL: the webhook resolves the order
+	 * by the "Order #N" description in the payment, and an order note asks the
+	 * merchant to look at it. Returns whether the mapping was stored.
+	 */
+	protected function store_mapping($client, $order_id, $order_info, $converted, $created, $token_amount) {
+		try {
+			$this->model_extension_payment_aneepay->addMapping($order_id, array(
+				'payment_id'     => $created['payment_id'],
+				'operation_id'   => $created['operation_id'],
+				'checkout_url'   => $created['checkout_url'],
+				'token'          => $client->get_token(),
+				'network'        => $client->get_network(),
+				'sandbox'        => $client->is_sandbox() ? 1 : 0,
+				'payment_status' => 'pending',
+				'token_amount'   => number_format((float) $token_amount, 2, '.', ''),
+				'order_currency' => (string) $order_info['currency_code'],
+				'order_total'    => (string) $order_info['total'],
+				'usd_amount'     => number_format((float) $converted['usd_amount'], 2, '.', ''),
+				'fiat_per_usd'   => (string) $converted['fiat_per_usd'],
+				'rate_source'    => (string) $converted['source'],
+			));
+
+			return true;
+		} catch (Throwable $e) {
+			$client->write_log('confirm', 'Payment ' . $created['payment_id'] . ' (' . $created['checkout_url'] . ') was created for order #' . $order_id . ' but could not be stored: ' . $e->getMessage() . ' — requires attention.', 'error');
+
+			try {
+				$this->model_extension_payment_aneepay->releaseClaim($order_id);
+			} catch (Throwable $ignored) {
+				// The claim expires on its own.
+			}
+
+			return false;
+		}
+	}
+
+	/**
+	 * Order history note for the pending status.
+	 */
+	protected function pending_note($stored, $payment_id) {
+		$note = $this->language->get('text_pending');
+
+		if (!$stored) {
+			$template = $this->language->get('text_mapping_failed');
+			$note    .= ' ' . sprintf($template, $payment_id);
+		}
+
+		return $note;
+	}
+
 	protected function find_created_payment($client, $reference, $token_amount) {
 		$rows = $client->list_payments(gmdate('Y-m-d\TH:i:s\Z', time() - 3600));
 

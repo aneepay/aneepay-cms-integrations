@@ -126,7 +126,7 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 				$found = $this->findCreatedPayment($api, 'Order #' . $id_order, (string) $converted['token_amount']);
 
 				if (null !== $found) {
-					$mapping = $this->storeMapping($order_model, $id_order, $cart, $api, $converted, $found, $total, $currency);
+					$mapping = $this->persistMapping($order_model, $id_order, $cart, $api, $converted, $found, $total, $currency);
 
 					$this->context->cookie->__set('aneepay_order_id', $this->module->orderToken($id_order), time() + 3600);
 
@@ -164,7 +164,7 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 			return;
 		}
 
-		$mapping = $this->storeMapping($order_model, $id_order, $cart, $api, $converted, $created, $total, $currency);
+		$mapping = $this->persistMapping($order_model, $id_order, $cart, $api, $converted, $created, $total, $currency);
 
 		$this->context->cookie->__set('aneepay_order_id', $this->module->orderToken($id_order), time() + 3600);
 
@@ -185,6 +185,45 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 	 *
 	 * @return array The stored mapping, ready for renderPending()
 	 */
+	/**
+	 * Persist the created payment, degrading instead of failing.
+	 *
+	 * The payment already exists at AneePay, so a storage failure must not cancel
+	 * the order or hide the checkout URL: the webhook resolves the order by the
+	 * "Order #N" description in the payment, and a private order note asks the
+	 * merchant to look at it. Returns the mapping when stored, a usable subset
+	 * otherwise.
+	 */
+	protected function persistMapping($order_model, $id_order, $cart, $api, $converted, $created, $total, $currency) {
+		try {
+			return $this->storeMapping($order_model, $id_order, $cart, $api, $converted, $created, $total, $currency);
+		} catch (Throwable $e) {
+			$api->write_log('payment', 'Payment ' . $created['payment_id'] . ' (' . $created['checkout_url'] . ') was created for order #' . $id_order . ' but could not be stored: ' . $e->getMessage() . ' — requires attention.', 'error');
+
+			try {
+				$order_model->releaseClaim($id_order);
+
+				$order = new Order($id_order);
+
+				if (Validate::isLoadedObject($order)) {
+					$order->note .= ($order->note ? "\n" : '') . 'AneePay payment ' . $created['payment_id'] . ' was created but could not be saved locally. The buyer can still pay it; check the AneePay account if the status stays pending.';
+					$order->update();
+				}
+			} catch (Throwable $ignored) {
+				// The claim expires on its own.
+			}
+
+			return array(
+				'payment_id'   => (string) $created['payment_id'],
+				'checkout_url' => (string) $created['checkout_url'],
+				'token'        => (string) $api->get_token(),
+				'token_amount' => number_format((float) $converted['token_amount'], 2, '.', ''),
+				'network'      => (string) $api->get_network(),
+				'sandbox'      => $api->is_sandbox() ? 1 : 0,
+			);
+		}
+	}
+
 	protected function storeMapping($order_model, $id_order, $cart, $api, $converted, $created, $total, $currency) {
 		$mapping = array(
 			'id_cart'        => (int) $cart->id,

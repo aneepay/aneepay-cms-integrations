@@ -75,6 +75,9 @@ install.xml                                            # ocmod manifest (add-on 
   start a second AneePay payment. If the API answer is lost (timeout, unreadable
   body), the plugin adopts the payment found in the account list by amount and
   order reference instead of retrying blind — there is no `Idempotency-Key`.
+  If saving the mapping still fails after the payment exists, the order is not
+  cancelled: the failure is logged with the payment ID and checkout URL, the
+  order history says it needs attention, and the buyer is sent to the checkout.
 - **Reconcile Payments** reads the account payment list for the last 1–30 days,
   applies the status of every payment it can match to an order, and reports
   `checked` / `matched` / `updated` / `unmatched`. Use it when a webhook was lost

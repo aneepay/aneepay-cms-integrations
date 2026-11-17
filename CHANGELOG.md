@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GET /accounts/{id}/payments` for the last hour, matches it by amount and
   order reference and reuses it. A blind retry is never issued, because the API
   has no `Idempotency-Key`.
+- A created payment is never lost when the local bookkeeping fails: if storing
+  the mapping throws (or WooCommerce cannot save the order meta), the plugin
+  logs the payment ID and checkout URL at error level, releases the creation
+  lock, leaves a note on the order and still sends the buyer to the checkout.
+  The webhook resolves such an order by the `Order #N` description, and
+  **Reconcile** reports the payment if the order still stays pending. The order
+  is deliberately not cancelled, because the buyer already has a payable
+  invoice.
 - A manual **Reconcile** tool on every settings page: it reads the account
   payment list for the last N days (1–30), applies the status of every payment
   that matches an order and reports `checked` / `matched` / `updated` /

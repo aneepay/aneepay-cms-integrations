@@ -960,20 +960,50 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 	 * @return array WooCommerce process_payment() result.
 	 */
 	protected function complete_payment( $order, $created, $converted, $token_amount, $order_total ) {
-		$this->attach_payment_to_order( $order, $created, $converted, $token_amount, $order_total );
+		try {
+			$this->attach_payment_to_order( $order, $created, $converted, $token_amount, $order_total );
 
-		$order->save();
+			$order->save();
 
-		$order->update_status(
-			'pending',
-			sprintf(
-				/* translators: %s: payment id */
-				__( 'Awaiting crypto payment. AneePay payment ID: %s', 'aneepay-crypto-gateway' ),
-				$created['payment_id']
-			)
-		);
+			$order->update_status(
+				'pending',
+				sprintf(
+					/* translators: %s: payment id */
+					__( 'Awaiting crypto payment. AneePay payment ID: %s', 'aneepay-crypto-gateway' ),
+					$created['payment_id']
+				)
+			);
 
-		wc_reduce_stock_levels( $order->get_id() );
+			wc_reduce_stock_levels( $order->get_id() );
+		} catch ( Throwable $e ) {
+			// The payment already exists at AneePay, so never fail the checkout
+			// here: the buyer can pay the invoice, and the webhook resolves the
+			// order by the "Order #N" description. Leave a note for the merchant.
+			$this->api_handler->log(
+				'process_payment',
+				sprintf(
+					'Payment %1$s (%2$s) was created for order #%3$d but could not be stored: %4$s',
+					$created['payment_id'],
+					$created['checkout_url'],
+					$order->get_id(),
+					$e->getMessage()
+				),
+				'error'
+			);
+
+			try {
+				$order->add_order_note(
+					sprintf(
+						/* translators: 1: payment id, 2: error message */
+						__( 'AneePay payment %1$s was created but could not be saved locally (%2$s). The buyer can still pay it; check the AneePay account if the status stays pending.', 'aneepay-crypto-gateway' ),
+						$created['payment_id'],
+						$e->getMessage()
+					)
+				);
+			} catch ( Throwable $ignored ) {
+				// The log entry above is the fallback.
+			}
+		}
 
 		// Track the order so the store-side success/fail pages (configured in
 		// the AneePay panel as SUCCESS_URL / FAIL_URL) can identify it.
