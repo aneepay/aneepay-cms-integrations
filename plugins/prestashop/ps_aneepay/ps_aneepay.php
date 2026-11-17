@@ -458,6 +458,7 @@ class Ps_Aneepay extends PaymentModule {
 		$is_submit = Tools::isSubmit('submitAneepay')
 			|| Tools::isSubmit('submitAneepayTest')
 			|| Tools::isSubmit('submitAneepaySync')
+			|| Tools::isSubmit('submitAneepayReconcile')
 			|| Tools::isSubmit('submitAneepayClearLog')
 			|| Tools::isSubmit('submitAneepayRefreshLog');
 		$token_valid = !$is_submit
@@ -471,6 +472,8 @@ class Ps_Aneepay extends PaymentModule {
 			$output .= $this->renderTestConnectionResult();
 		} elseif (Tools::isSubmit('submitAneepaySync')) {
 			$output .= $this->renderSyncPaymentResult();
+		} elseif (Tools::isSubmit('submitAneepayReconcile')) {
+			$output .= $this->renderReconcileResult();
 		} elseif (Tools::isSubmit('submitAneepayClearLog')) {
 			$this->getApi()->clear_request_log();
 			$output .= $this->displayConfirmation($this->l('Request log cleared.'));
@@ -492,6 +495,7 @@ class Ps_Aneepay extends PaymentModule {
 		$html .= $this->renderNotices($account_id, $secret);
 		$html .= $this->renderTestConnectionForm();
 		$html .= $this->renderSyncPaymentForm();
+		$html .= $this->renderReconcileForm();
 		$html .= $this->renderConversionExample();
 		$html .= $this->renderRequestLog();
 		$html .= $this->renderForm();
@@ -657,6 +661,97 @@ class Ps_Aneepay extends PaymentModule {
 			$this->l('Order #%1$d synced: AneePay reports "%2$s".'),
 			$id_order,
 			(string) $data['status']
+		));
+	}
+
+	/**
+	 * Handle the "Reconcile payments" form.
+	 *
+	 * @return string
+	 */
+	protected function renderReconcileForm() {
+		$html  = '<div class="panel"><div class="panel-heading"><i class="icon-exchange"></i> ' . $this->l('Reconcile payments') . '</div><div class="panel-body">';
+		$html .= '<form method="post" action="">';
+		$html .= '<input type="hidden" name="token" value="' . Tools::safeOutput(Tools::getAdminTokenLite('AdminModules')) . '">';
+		$html .= '<div class="form-group">';
+		$html .= '<label class="control-label">' . $this->l('Days back') . '</label>';
+		$html .= '<input type="number" min="1" max="30" step="1" name="aneepay_reconcile_days" value="7" class="form-control" style="max-width:160px;">';
+		$html .= '<p class="help-block">' . $this->l('Compares this store with the payments AneePay recorded in the last N days and applies the status of every payment it can match to an order. A webhook is delivered once and never replayed, so this is how a missed delivery is found.') . '</p>';
+		$html .= '</div>';
+		$html .= '<button type="submit" name="submitAneepayReconcile" value="1" class="btn btn-default"><i class="icon-exchange"></i> ' . $this->l('Reconcile') . '</button>';
+		$html .= '</form>';
+		$html .= '</div></div>';
+
+		return $html;
+	}
+
+	/**
+	 * Handle the "Reconcile payments" form.
+	 *
+	 * @return string
+	 */
+	protected function renderReconcileResult() {
+		$days = max(1, min(30, (int) Tools::getValue('aneepay_reconcile_days', 7)));
+		$api  = $this->getApi();
+
+		$created_from = gmdate('Y-m-d\TH:i:s\Z', time() - $days * 86400);
+		$payments = $api->list_payments($created_from);
+
+		if (null === $payments) {
+			return $this->displayError(sprintf(
+				$this->l('AneePay did not return the payment list (HTTP %d).'),
+				$api->lastHttpCode()
+			));
+		}
+
+		$orders  = new AneePayOrder();
+		$webhook = new AneePayWebhook($api, $orders, $this->getStateMap());
+		$stats   = array('checked' => 0, 'matched' => 0, 'updated' => 0, 'unmatched' => 0);
+
+		foreach ($payments as $payment) {
+			if (!is_array($payment) || empty($payment['id'])) {
+				continue;
+			}
+
+			$stats['checked']++;
+
+			$status = isset($payment['status']) ? strtolower(trim((string) $payment['status'])) : '';
+
+			// Only terminal states are worth applying; a pending payment would
+			// just re-add "awaiting payment" notes.
+			if (!in_array($status, array('success', 'failed', 'cancelled'), true)) {
+				continue;
+			}
+
+			$mapping = $orders->getByPaymentId((string) $payment['id']);
+
+			if (!$mapping) {
+				$stats['unmatched']++;
+				$api->write_log('reconcile', 'Payment ' . $payment['id'] . ' (' . $status . ') has no matching order.', 'warning');
+				continue;
+			}
+
+			$stats['matched']++;
+
+			$id_order = (int) $mapping['id_order'];
+			$before   = (string) $mapping['payment_status'];
+
+			$webhook->apply($id_order, $status);
+
+			$after_mapping = $orders->getByOrder($id_order);
+			$after         = $after_mapping ? (string) $after_mapping['payment_status'] : $before;
+
+			if ($after !== $before) {
+				$stats['updated']++;
+			}
+		}
+
+		return $this->displayConfirmation(sprintf(
+			$this->l('Checked %1$d payments: %2$d matched an order, %3$d were updated, %4$d had no order.'),
+			$stats['checked'],
+			$stats['matched'],
+			$stats['updated'],
+			$stats['unmatched']
 		));
 	}
 

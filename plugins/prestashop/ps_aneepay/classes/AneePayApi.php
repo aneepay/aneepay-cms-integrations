@@ -179,6 +179,85 @@ class AneePayApi {
 	}
 
 	/**
+	 * List the account payments created since a point in time.
+	 *
+	 * The vendor never re-sends a webhook, so a delivery that was missed or
+	 * exhausted its retries can only be found by reading the account list.
+	 *
+	 * @param string $created_from ISO-8601 timestamp (UTC).
+	 *
+	 * @return array|null Payment rows, or null on failure
+	 */
+	public function list_payments($created_from) {
+		$this->last_http_code = 0;
+
+		$account_id = $this->get('account_id', '');
+
+		if ('' === (string) $account_id) {
+			$this->write_log('reconcile', 'Account ID is not set.', 'error');
+
+			return null;
+		}
+
+		$query = http_build_query(array('created_from' => (string) $created_from), '', '&', PHP_QUERY_RFC3986);
+		$path = 'accounts/' . rawurlencode((string) $account_id) . '/payments?' . $query;
+
+		$response = $this->request('GET', $this->api_url($path), null);
+
+		$this->last_http_code = (int) $response['code'];
+
+		if (!empty($response['error'])) {
+			$this->write_log('reconcile', 'GET ' . $path . ' failed: ' . $response['error'], 'error');
+
+			return null;
+		}
+
+		if (404 === $this->last_http_code) {
+			return null;
+		}
+
+		try {
+			$data = $this->decode_response($response, 200);
+		} catch (AneePayApiException $e) {
+			$this->last_http_code = (int) $e->getHttpCode();
+			$this->write_log('reconcile', 'GET ' . $path . ' failed: ' . $e->getMessage(), 'error');
+
+			return null;
+		}
+
+		if (!is_array($data)) {
+			return array();
+		}
+
+		return $this->paymentRows($data);
+	}
+
+	/**
+	 * Pull the payment rows out of a list response.
+	 *
+	 * The contract documents a bare array; wrapped collections are tolerated
+	 * anyway, so a cosmetic change on the API side cannot silently turn
+	 * reconcile into a no-op.
+	 *
+	 * @param array $data Decoded response body
+	 *
+	 * @return array
+	 */
+	protected function paymentRows(array $data) {
+		if (isset($data[0]) && is_array($data[0])) {
+			return $data;
+		}
+
+		foreach (array('results', 'data', 'payments', 'items') as $key) {
+			if (isset($data[$key]) && is_array($data[$key])) {
+				return array_values($data[$key]);
+			}
+		}
+
+		return array();
+	}
+
+	/**
 	 * Validate the merchant connection.
 	 *
 	 * @return array{ok:bool, code:int, error_code:string, message:string}

@@ -70,6 +70,10 @@ install.xml                                            # ocmod manifest (add-on 
   optional), fetches that payment from the API and applies its status right away —
   the manual fix for "the buyer paid but the order is still pending", since
   webhooks only ever deliver `success` and there is no replay endpoint.
+- **Reconcile Payments** reads the account payment list for the last 1–30 days,
+  applies the status of every payment it can match to an order, and reports
+  `checked` / `matched` / `updated` / `unmatched`. Use it when a webhook was lost
+  for good — the vendor never re-sends one on request.
 - Uninstall keeps the `aneepay_order` / `aneepay_log` tables by default; set
   "On uninstall" to "Delete data" in the settings to drop them.
 - The admin page upgrades an existing `aneepay_order` table in place (adds

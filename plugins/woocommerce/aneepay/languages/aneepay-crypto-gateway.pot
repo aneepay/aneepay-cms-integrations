@@ -142,3 +142,38 @@ msgstr ""
 #: aneepay.php
 msgid "Insufficient permissions."
 msgstr ""
+#. Admin tool: reconcile period heading.
+#: includes/class-wc-gateway-crypto.php
+msgid "Reconcile payments"
+msgstr ""
+
+#. Admin tool: reconcile explanation.
+#: includes/class-wc-gateway-crypto.php
+msgid "Compares this store with the payments AneePay recorded in the last N days and applies the status of every payment it can match to an order. A webhook is delivered once and never replayed, so this is how a missed delivery is found."
+msgstr ""
+
+#. Admin tool: reconcile button.
+#: includes/class-wc-gateway-crypto.php
+msgid "Reconcile"
+msgstr ""
+
+#. Admin tool: reconcile progress.
+#: includes/class-wc-gateway-crypto.php
+msgid "Reconciling..."
+msgstr ""
+
+#. Admin tool: reconcile request failed.
+#: includes/class-wc-gateway-crypto.php
+msgid "Reconcile failed."
+msgstr ""
+
+#. Admin AJAX: the payment list could not be read. %d: HTTP status code.
+#: aneepay.php
+msgid "AneePay did not return the payment list (HTTP %d)."
+msgstr ""
+
+#. Admin AJAX: reconcile result. 1: checked, 2: matched, 3: updated, 4: unmatched.
+#: aneepay.php
+msgid "Checked %1$d payments: %2$d matched an order, %3$d were updated, %4$d had no order."
+msgstr ""
+

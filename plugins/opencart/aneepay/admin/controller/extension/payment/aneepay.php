@@ -196,6 +196,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$data['cancel']     = $this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'] . '&type=payment', true);
 		$data['test_url']   = $this->url->link('extension/payment/aneepay/test_connection', 'user_token=' . $this->session->data['user_token'], true);
 		$data['sync_url']   = $this->url->link('extension/payment/aneepay/sync_payment', 'user_token=' . $this->session->data['user_token'], true);
+		$data['reconcile_url'] = $this->url->link('extension/payment/aneepay/reconcile', 'user_token=' . $this->session->data['user_token'], true);
 		$data['logs_url']   = $this->url->link('extension/payment/aneepay/get_logs', 'user_token=' . $this->session->data['user_token'], true);
 		$data['clear_url']  = $this->url->link('extension/payment/aneepay/clear_logs', 'user_token=' . $this->session->data['user_token'], true);
 
@@ -493,6 +494,101 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'ok'      => true,
 			'status'  => (string) $data['status'],
 			'message' => sprintf($this->language->get('text_sync_ok'), $order_id, (string) $data['status']),
+		)));
+	}
+
+	/**
+	 * AJAX: compare the store with the account payment list for a period.
+	 *
+	 * Catches what a lost webhook hides: a payment that AneePay recorded but no
+	 * order reflects. Applies the status of every payment that matches an order.
+	 */
+	public function reconcile() {
+		$this->load->language('extension/payment/aneepay');
+		$this->load->model('extension/payment/aneepay');
+		$this->load_lib();
+
+		$this->response->addHeader('Content-Type: application/json');
+
+		if (!$this->authorised()) {
+			$this->response->setOutput(json_encode(array('ok' => false, 'message' => $this->language->get('error_permission'))));
+			return;
+		}
+
+		$days = isset($this->request->post['days']) ? (int) $this->request->post['days'] : 7;
+		$days = max(1, min(30, $days));
+
+		$client       = $this->admin_client();
+		$created_from = gmdate('Y-m-d\TH:i:s\Z', time() - $days * 86400);
+		$payments     = $client->list_payments($created_from);
+
+		if (null === $payments) {
+			$this->response->setOutput(json_encode(array(
+				'ok'      => false,
+				'message' => sprintf($this->language->get('error_reconcile_list'), $client->last_http_code()),
+			)));
+			return;
+		}
+
+		$status_map = array(
+			'pending'   => (int) $this->config->get('payment_aneepay_pending_status_id'),
+			'success'   => (int) $this->config->get('payment_aneepay_paid_status_id'),
+			'failed'    => (int) $this->config->get('payment_aneepay_failed_status_id'),
+			'cancelled' => (int) $this->config->get('payment_aneepay_cancelled_status_id'),
+		);
+
+		$webhook = new AneePay_Webhook($this->registry, $client, $status_map);
+
+		$stats = array('checked' => 0, 'matched' => 0, 'updated' => 0, 'unmatched' => 0);
+
+		foreach ($payments as $payment) {
+			if (!is_array($payment) || empty($payment['id'])) {
+				continue;
+			}
+
+			$stats['checked']++;
+
+			$status = isset($payment['status']) ? strtolower(trim((string) $payment['status'])) : '';
+
+			// Only terminal states are worth applying; a pending payment would
+			// just re-add "awaiting payment" notes.
+			if (!in_array($status, array('success', 'failed', 'cancelled'), true)) {
+				continue;
+			}
+
+			$mapping = $this->model_extension_payment_aneepay->getByPaymentId((string) $payment['id']);
+
+			if (!$mapping) {
+				$stats['unmatched']++;
+				$client->write_log('reconcile', "Payment {$payment['id']} ({$status}) has no matching order.", 'warning');
+				continue;
+			}
+
+			$stats['matched']++;
+
+			$order_id = (int) $mapping['order_id'];
+			$before   = (string) $mapping['payment_status'];
+
+			$webhook->apply($order_id, $status, '');
+
+			$after_mapping = $this->model_extension_payment_aneepay->getByOrderId($order_id);
+			$after         = $after_mapping ? (string) $after_mapping['payment_status'] : $before;
+
+			if ($after !== $before) {
+				$stats['updated']++;
+			}
+		}
+
+		$this->response->setOutput(json_encode(array(
+			'ok'      => true,
+			'stats'   => $stats,
+			'message' => sprintf(
+				$this->language->get('text_reconcile_ok'),
+				$stats['checked'],
+				$stats['matched'],
+				$stats['updated'],
+				$stats['unmatched']
+			),
 		)));
 	}
 

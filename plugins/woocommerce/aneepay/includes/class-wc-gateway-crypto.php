@@ -403,6 +403,8 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 
 		$this->render_sync_payment();
 
+		$this->render_reconcile();
+
 		$this->render_conversion_example();
 
 		$this->render_request_log();
@@ -566,6 +568,60 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 					.catch(function () {
 						btn.disabled = false;
 						out.textContent = '<?php echo esc_js( __( 'Sync failed.', 'aneepay-crypto-gateway' ) ); ?>';
+						out.style.color = 'red';
+					});
+			});
+		})();
+		</script>
+		<?php
+	}
+
+	/**
+	 * Print the "Reconcile payments" block.
+	 *
+	 * @return void
+	 */
+	protected function render_reconcile() {
+		$nonce = wp_create_nonce( 'aneepay_reconcile' );
+
+		echo '<div class="aneepay-reconcile">';
+		echo '<h3>' . esc_html__( 'Reconcile payments', 'aneepay-crypto-gateway' ) . '</h3>';
+		echo '<p class="description">' . esc_html__( 'Compares this store with the payments AneePay recorded in the last N days and applies the status of every payment it can match to an order. A webhook is delivered once and never replayed, so this is how a missed delivery is found.', 'aneepay-crypto-gateway' ) . '</p>';
+		echo '<p><input type="number" id="aneepay-reconcile-days" class="small-text" min="1" max="30" step="1" value="7"> ';
+		echo '<button type="button" id="aneepay-reconcile" class="button" data-nonce="' . esc_attr( $nonce ) . '">' . esc_html__( 'Reconcile', 'aneepay-crypto-gateway' ) . '</button>';
+		echo ' <span id="aneepay-reconcile-result" style="margin-left:8px;"></span></p>';
+		echo '</div>';
+		?>
+		<script type="text/javascript">
+		(function () {
+			'use strict';
+			var btn = document.getElementById('aneepay-reconcile');
+			var out = document.getElementById('aneepay-reconcile-result');
+			var days = document.getElementById('aneepay-reconcile-days');
+			if (!btn) { return; }
+			btn.addEventListener('click', function () {
+				btn.disabled = true;
+				out.style.color = '';
+				out.textContent = '<?php echo esc_js( __( 'Reconciling...', 'aneepay-crypto-gateway' ) ); ?>';
+				var body = new URLSearchParams();
+				body.append('action', 'aneepay_reconcile');
+				body.append('nonce', btn.getAttribute('data-nonce'));
+				body.append('days', days ? days.value : '7');
+				fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: body })
+					.then(function (r) { return r.json(); })
+					.then(function (d) {
+						btn.disabled = false;
+						if (d && d.success) {
+							out.textContent = (d.data && d.data.message) || 'OK';
+							out.style.color = 'green';
+						} else {
+							out.textContent = (d && d.data && d.data.message) || '<?php echo esc_js( __( 'Reconcile failed.', 'aneepay-crypto-gateway' ) ); ?>';
+							out.style.color = 'red';
+						}
+					})
+					.catch(function () {
+						btn.disabled = false;
+						out.textContent = '<?php echo esc_js( __( 'Reconcile failed.', 'aneepay-crypto-gateway' ) ); ?>';
 						out.style.color = 'red';
 					});
 			});
@@ -1672,6 +1728,96 @@ function aneepay_update_order_by_status( $payment_id, $status, $order_id = 0 ) {
 	aneepay_apply_payment_status( $order, $status );
 
 	return true;
+}
+
+/**
+ * Reconcile the store with the payments AneePay recorded in a period.
+ *
+ * Webhooks only fire once and are never replayed, so a delivery that was lost
+ * (endpoint down, 8 retries exhausted, order created after the delivery) is
+ * invisible until someone reads the account payment list. This walks that list
+ * and applies the status of every payment it can match to an order.
+ *
+ * @param int $days How many days back to look (1-30).
+ * @return array{checked:int, matched:int, updated:int, unmatched:int, error?:string, http?:int}
+ */
+function aneepay_reconcile_payments( $days = 7 ) {
+	$stats = array(
+		'checked'   => 0,
+		'matched'   => 0,
+		'updated'   => 0,
+		'unmatched' => 0,
+	);
+
+	$days = max( 1, min( 30, (int) $days ) );
+
+	$gateway = new WC_Gateway_AneePay_Crypto();
+	$client  = $gateway->api_handler;
+
+	$created_from = gmdate( 'Y-m-d\TH:i:s\Z', time() - $days * DAY_IN_SECONDS );
+
+	$payments = $client->list_payments( $created_from );
+
+	if ( null === $payments ) {
+		$stats['error'] = 'api';
+		$stats['http']  = $client->last_http_code();
+
+		return $stats;
+	}
+
+	foreach ( $payments as $payment ) {
+		if ( ! is_array( $payment ) || empty( $payment['id'] ) ) {
+			continue;
+		}
+
+		$stats['checked']++;
+
+		$status = isset( $payment['status'] ) ? sanitize_key( (string) $payment['status'] ) : '';
+
+		// Only terminal states are worth applying; a pending payment would
+		// just re-add "awaiting payment" notes.
+		if ( ! in_array( $status, array( 'success', 'failed', 'cancelled' ), true ) ) {
+			continue;
+		}
+
+		$params = array( 'payment_id' => (string) $payment['id'] );
+
+		if ( ! empty( $payment['operation_id'] ) ) {
+			$params['operation_id'] = (string) $payment['operation_id'];
+		}
+
+		$order = aneepay_resolve_order( $params );
+
+		if ( ! $order ) {
+			$stats['unmatched']++;
+
+			$client->log(
+				'reconcile',
+				sprintf(
+					'Payment %1$s (%2$s) has no matching order.',
+					(string) $payment['id'],
+					$status
+				),
+				'warning'
+			);
+
+			continue;
+		}
+
+		$stats['matched']++;
+
+		$before = (string) $order->get_meta( '_aneepay_payment_status', true );
+
+		aneepay_apply_payment_status( $order, $status, $payment );
+
+		$after = (string) $order->get_meta( '_aneepay_payment_status', true );
+
+		if ( $after !== $before ) {
+			$stats['updated']++;
+		}
+	}
+
+	return $stats;
 }
 
 /**

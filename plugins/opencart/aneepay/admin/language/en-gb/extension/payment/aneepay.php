@@ -92,6 +92,16 @@ $_['error_sync_not_found']    = 'AneePay did not return a payment for %1$s (HTTP
 $_['error_sync_no_order']     = 'No AneePay order matches payment %s. Open the order and copy its payment ID, or pass the order ID as well.';
 $_['help_sync_payment']       = 'Fetches the payment from AneePay right now and applies its status to the order. Use it when the buyer says they paid but the order is still pending.';
 
+// Reconcile a period with the account payment list
+$_['button_reconcile']         = 'Reconcile';
+$_['text_reconcile']           = 'Reconcile Payments';
+$_['text_reconciling']         = 'Reconciling…';
+$_['text_reconcile_failed']    = 'Reconcile failed';
+$_['text_reconcile_ok']        = 'Checked %1$d payments: %2$d matched an order, %3$d were updated, %4$d had no order.';
+$_['entry_reconcile_days']     = 'Days back';
+$_['error_reconcile_list']     = 'AneePay did not return the payment list (HTTP %d).';
+$_['help_reconcile']           = 'Compares this store with the payments AneePay recorded in the last N days and applies the status of every payment it can match to an order. A webhook is delivered once and never replayed, so this is how a missed delivery is found.';
+
 $_['button_clear']       = 'Clear';
 $_['text_checking']      = 'Checking…';
 $_['text_connected']     = 'Connection OK. Account exists and the domain matches.';

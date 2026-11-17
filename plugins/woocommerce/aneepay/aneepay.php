@@ -274,6 +274,9 @@ function aneepay_register_endpoints() {
 	// Admin-only: pull the current status of one payment from the API right now.
 	add_action( 'wp_ajax_aneepay_sync_payment', 'aneepay_ajax_sync_payment' );
 
+	// Admin-only: compare the store with the account payment list for a period.
+	add_action( 'wp_ajax_aneepay_reconcile', 'aneepay_ajax_reconcile' );
+
 	// Admin-only: in-app request log panel.
 	add_action( 'wp_ajax_aneepay_get_logs', 'aneepay_ajax_get_logs' );
 	add_action( 'wp_ajax_aneepay_clear_logs', 'aneepay_ajax_clear_logs' );
@@ -338,6 +341,48 @@ function aneepay_ajax_sync_payment() {
 		array(
 			/* translators: 1: order ID, 2: AneePay payment status. */
 			'message' => sprintf( __( 'Order #%1$d synced: AneePay reports "%2$s".', 'aneepay-crypto-gateway' ), $order->get_id(), $status ),
+		)
+	);
+}
+
+/**
+ * Admin AJAX: compare the store with the account payment list for a period.
+ *
+ * Catches what a lost webhook hides: a payment that AneePay recorded but no
+ * order reflects, and orders whose webhook never arrived.
+ *
+ * @return void
+ */
+function aneepay_ajax_reconcile() {
+	check_ajax_referer( 'aneepay_reconcile', 'nonce' );
+
+	if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'aneepay-crypto-gateway' ) ) );
+	}
+
+	$days  = isset( $_POST['days'] ) ? absint( $_POST['days'] ) : 7;
+	$stats = aneepay_reconcile_payments( $days );
+
+	if ( ! empty( $stats['error'] ) ) {
+		wp_send_json_error(
+			array(
+				/* translators: %d: HTTP status code. */
+				'message' => sprintf( __( 'AneePay did not return the payment list (HTTP %d).', 'aneepay-crypto-gateway' ), isset( $stats['http'] ) ? (int) $stats['http'] : 0 ),
+			)
+		);
+	}
+
+	wp_send_json_success(
+		array(
+			'stats' => $stats,
+			/* translators: 1: checked, 2: matched, 3: updated, 4: unmatched counts. */
+			'message' => sprintf(
+				__( 'Checked %1$d payments: %2$d matched an order, %3$d were updated, %4$d had no order.', 'aneepay-crypto-gateway' ),
+				(int) $stats['checked'],
+				(int) $stats['matched'],
+				(int) $stats['updated'],
+				(int) $stats['unmatched']
+			),
 		)
 	);
 }

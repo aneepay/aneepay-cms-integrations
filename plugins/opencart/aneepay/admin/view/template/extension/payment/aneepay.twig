@@ -163,6 +163,25 @@
       </div>
 
       <div class="panel panel-default">
+        <div class="panel-heading"><h3 class="panel-title">{{ text_reconcile }}</h3></div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label class="col-sm-2 control-label" for="input-reconcile-days">{{ entry_reconcile_days }}</label>
+            <div class="col-sm-10">
+              <input type="number" min="1" max="30" step="1" value="7" id="input-reconcile-days" class="form-control" />
+              <div class="help-block">{{ help_reconcile }}</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="col-sm-10 col-sm-offset-2">
+              <button type="button" id="aneepay-reconcile" class="btn btn-default" data-url="{{ reconcile_url }}">{{ button_reconcile }}</button>
+              <span id="aneepay-reconcile-result"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel panel-default">
         <div class="panel-heading"><h3 class="panel-title">{{ text_coin }}</h3></div>
         <div class="panel-body">
           <div class="form-group">
@@ -406,6 +425,37 @@
 					syncBtn.disabled = false;
 					syncOut.textContent = '{{ text_sync_failed }}';
 					syncOut.style.color = 'red';
+				});
+		});
+	}
+
+	// Reconcile a period with the account payment list
+	var reconcileBtn = document.getElementById('aneepay-reconcile');
+	var reconcileOut = document.getElementById('aneepay-reconcile-result');
+	var reconcileDays = document.getElementById('input-reconcile-days');
+	if (reconcileBtn) {
+		reconcileBtn.addEventListener('click', function () {
+			reconcileBtn.disabled = true;
+			reconcileOut.style.color = '';
+			reconcileOut.textContent = '{{ text_reconciling }}';
+			var body = new URLSearchParams();
+			body.append('days', reconcileDays ? reconcileDays.value : '7');
+			fetch(reconcileBtn.getAttribute('data-url'), { method: 'POST', credentials: 'same-origin', body: body })
+				.then(function (r) { return r.json(); })
+				.then(function (d) {
+					reconcileBtn.disabled = false;
+					if (d && d.ok) {
+						reconcileOut.textContent = d.message || '';
+						reconcileOut.style.color = 'green';
+					} else {
+						reconcileOut.textContent = (d && d.message) || '{{ text_reconcile_failed }}';
+						reconcileOut.style.color = 'red';
+					}
+				})
+				.catch(function () {
+					reconcileBtn.disabled = false;
+					reconcileOut.textContent = '{{ text_reconcile_failed }}';
+					reconcileOut.style.color = 'red';
 				});
 		});
 	}

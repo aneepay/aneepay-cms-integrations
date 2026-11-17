@@ -463,6 +463,86 @@ class AneePay_Crypto_API_Handler {
 	}
 
 	/**
+	 * List the account payments created since a point in time.
+	 *
+	 * The vendor never re-sends a webhook, so a delivery that was missed or
+	 * exhausted its retries can only be found by reading the account list.
+	 *
+	 * @param string $created_from ISO-8601 timestamp (UTC).
+	 * @return array|null Payment rows, or null on failure.
+	 */
+	public function list_payments( $created_from ) {
+		$this->last_http_code = 0;
+
+		$account_id = $this->get_account_id();
+
+		if ( '' === $account_id ) {
+			$this->log( 'list_payments', 'Account ID is not set.', 'error' );
+			return null;
+		}
+
+		$url = $this->api_url(
+			'accounts/' . rawurlencode( $account_id ) . '/payments?' . http_build_query(
+				array( 'created_from' => (string) $created_from ),
+				'',
+				'&',
+				PHP_QUERY_RFC3986
+			)
+		);
+
+		$this->log( 'list_payments', 'GET ' . $url );
+
+		$response = $this->remote_request( 'GET', $url, $this->request_args() );
+
+		if ( is_wp_error( $response ) ) {
+			$this->log( 'list_payments', $response->get_error_message(), 'error' );
+			return null;
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+
+		$this->last_http_code = $code;
+
+		if ( 200 !== $code ) {
+			$this->log( 'list_payments', 'Unexpected status: ' . $code . ' body: ' . wp_remote_retrieve_body( $response ), 'error' );
+			return null;
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true, 512, JSON_BIGINT_AS_STRING );
+
+		if ( ! is_array( $data ) ) {
+			$this->log( 'list_payments', 'Invalid JSON response', 'error' );
+			return null;
+		}
+
+		return self::payment_rows( $data );
+	}
+
+	/**
+	 * Pull the payment rows out of a list response.
+	 *
+	 * The contract documents a bare array; wrapped collections are tolerated
+	 * anyway, so a cosmetic change on the API side cannot silently turn
+	 * reconcile into a no-op.
+	 *
+	 * @param array $data Decoded response body.
+	 * @return array
+	 */
+	protected static function payment_rows( $data ) {
+		if ( isset( $data[0] ) && is_array( $data[0] ) ) {
+			return $data;
+		}
+
+		foreach ( array( 'results', 'data', 'payments', 'items' ) as $key ) {
+			if ( isset( $data[ $key ] ) && is_array( $data[ $key ] ) ) {
+				return array_values( $data[ $key ] );
+			}
+		}
+
+		return array();
+	}
+
+	/**
 	 * Validate the merchant connection (Account ID, domain, safe status).
 	 *
 	 * Calls the account payments list endpoint, which the server-side checks

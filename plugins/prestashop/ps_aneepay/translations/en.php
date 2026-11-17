@@ -29,3 +29,9 @@ $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_dfb86153432a640cd09a041f82a6ba7a'] 
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_ad3800ab89176e4bba707fe3266d4910'] = 'AneePay did not return a payment for %1$s (HTTP %2$d).';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_052e20e50347d3c397f3ee46b50b05d0'] = 'No AneePay order matches payment %s. Open the order and copy its payment ID, or pass the order ID as well.';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_07d18ef3b8890e8550b37380653a1129'] = 'Order #%1$d synced: AneePay reports "%2$s".';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_1c6c1bbb95f5b26b88bc61c469ca4f56'] = 'Reconcile payments';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_f8106295a3fd115527f3d2ecfa3f805c'] = 'Days back';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_21f3dd67b3e0a9c8fa43d92d06789ceb'] = 'Compares this store with the payments AneePay recorded in the last N days and applies the status of every payment it can match to an order. A webhook is delivered once and never replayed, so this is how a missed delivery is found.';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_fad857d5c329e6b67a007175c80bc7fe'] = 'Reconcile';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_ceea7f7c87cdafea3bdc33323f7264f0'] = 'AneePay did not return the payment list (HTTP %d).';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_82c28e5ee5352be2646077987c6cd455'] = 'Checked %1$d payments: %2$d matched an order, %3$d were updated, %4$d had no order.';

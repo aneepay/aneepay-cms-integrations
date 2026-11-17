@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   applies its status immediately. This is the escape hatch for "the buyer paid,
   the order is still pending", because webhooks only ever deliver `success` and
   there is no replay endpoint.
+- A manual **Reconcile** tool on every settings page: it reads the account
+  payment list for the last N days (1–30), applies the status of every payment
+  that matches an order and reports `checked` / `matched` / `updated` /
+  `unmatched`. A webhook is delivered once and never replayed, so this is the
+  only way to find a delivery that was lost for good.
 - `./scripts/pack.sh check` — verifies the single version source and lints all
   plugins without packaging anything.
 - `dist/SHA256SUMS` with the checksums of the built artifacts; artifacts of
