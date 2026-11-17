@@ -3,30 +3,128 @@
 # pack.sh — собирает (упаковывает) плагин AneePay под конкретную CMS.
 #
 # Использование:
-#   ./scripts/pack.sh <platform> [version]
+#   ./scripts/pack.sh <platform>
 #
 #   platform  wc | oc | ps         (или "all" для всех трёх)
-#   version   необязательно; по умолчанию берётся из ./VERSION
+#
+# Версия берётся ТОЛЬКО из ./VERSION (единый источник истины). Второй
+# аргумент убран намеренно: передавать версию мимо VERSION нельзя.
 #
 # Примеры:
 #   ./scripts/pack.sh wc                       # → dist/wc/aneepay.zip
-#   ./scripts/pack.sh oc 1.3.0                 # → dist/oc/aneepay-1.3.0.ocmod.zip
+#   ./scripts/pack.sh oc                       # → dist/oc/aneepay-<ver>.ocmod.zip
 #   ./scripts/pack.sh ps                       # → dist/ps/ps_aneepay.zip
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-PLATFORM="${1:-}"
-VERSION="${2:-$(tr -d '[:space:]' < VERSION 2>/dev/null || echo 'dev')}"
 DIST="$ROOT/dist"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 warn() { echo "WARN: $*" >&2; }
 
+PLATFORM="${1:-}"
+[ "$#" -le 1 ] || fail "версия задаётся только в ./VERSION, аргумент версии убран"
+
+[ -f VERSION ] || fail "нет файла VERSION"
+VERSION="$(tr -d '[:space:]' < VERSION)"
+[ -n "$VERSION" ] || fail "файл VERSION пустой"
+
 SRC_WC="plugins/woocommerce/aneepay"
 SRC_OC="plugins/opencart/aneepay"
 SRC_PS="plugins/prestashop/ps_aneepay"
+
+# ---------------------------------------------------------------------------
+# version — единый источник истины
+#
+# VERSION — единственное место, где версия задаётся руками. Остальные
+# носители версии (WC header + ANEEPAY_VERSION, OC install.xml, PS
+# $this->version) обязаны совпадать с ним: расхождение = ошибка сборки.
+# В артефакт версия всё равно штампуется из VERSION (см. stamp_*), чтобы
+# архив не зависел от того, обновили ли поля в исходниках.
+# ---------------------------------------------------------------------------
+
+wc_header_version() {
+  sed -nE 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' \
+    "${1:-$SRC_WC}/aneepay.php" | head -n 1
+}
+
+wc_const_version() {
+  sed -nE "s@^[[:space:]]*define\( 'ANEEPAY_VERSION', '([^']+)' \);[[:space:]]*\$@\1@p" \
+    "${1:-$SRC_WC}/aneepay.php" | head -n 1
+}
+
+oc_manifest_version() {
+  sed -nE 's@.*<version>([^<]+)</version>.*@\1@p' "${1:-$SRC_OC}/install.xml" | head -n 1
+}
+
+ps_module_version() {
+  sed -nE "s@^[[:space:]]*\\\$this->version[[:space:]]*=[[:space:]]*'([^']+)';.*@\1@p" \
+    "${1:-$SRC_PS}/ps_aneepay.php" | head -n 1
+}
+
+# Список «носителей версии» в исходниках (проверяется на расхождение с VERSION).
+version_sources() {
+  printf '%s\t%s\n' \
+    "plugins/woocommerce/aneepay/aneepay.php: * Version:" "$(wc_header_version)" \
+    "plugins/woocommerce/aneepay/aneepay.php: ANEEPAY_VERSION" "$(wc_const_version)" \
+    "plugins/opencart/aneepay/install.xml: <version>" "$(oc_manifest_version)" \
+    "plugins/prestashop/ps_aneepay/ps_aneepay.php: \$this->version" "$(ps_module_version)"
+}
+
+verify_versions() {
+  local bad=0 name value
+  echo "-- проверка единого источника версии (VERSION=$VERSION)"
+  while IFS=$'\t' read -r name value; do
+    if [ -z "$value" ]; then
+      echo "   [x] $name — не найдено" >&2
+      bad=1
+    elif [ "$value" != "$VERSION" ]; then
+      echo "   [x] $name = $value, ожидалось $VERSION" >&2
+      bad=1
+    else
+      echo "   [ok] $name = $value"
+    fi
+  done < <(version_sources)
+  [ "$bad" -eq 0 ] || fail "версия расходится с VERSION (VERSION=$VERSION): правь VERSION и источники вместе"
+}
+
+# In-place sed, переносимый между GNU и BSD/macOS.
+sed_i() {
+  local file="$1" expr="$2" tmp="$1.tmp.$$"
+  sed -E "$expr" "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
+stamp_version_wc() {
+  local base="$1"
+  sed_i "$base/aneepay.php" \
+    "s@^[[:space:]]*\\*[[:space:]]*Version:.*@ * Version:     $VERSION@"
+  sed_i "$base/aneepay.php" \
+    "s@^([[:space:]]*define\\( 'ANEEPAY_VERSION', ')[^']+(' \\);)\$@\\1$VERSION\\2@"
+}
+
+stamp_version_oc() {
+  local base="$1"
+  sed_i "$base/install.xml" "s@<version>[^<]*</version>@<version>$VERSION</version>@"
+}
+
+stamp_version_ps() {
+  local base="$1"
+  sed_i "$base/ps_aneepay.php" \
+    "s@^([[:space:]]*\\\$this->version[[:space:]]*=[[:space:]]*')[^']+(';)\$@\\1$VERSION\\2@"
+}
+
+# Страховка: артефакт уходит в архив только с версией из VERSION.
+assert_version_in_staging() {
+  local platform="$1" base="$2" got=""
+  case "$platform" in
+    wc) got="$(wc_header_version "$base")" ;;
+    oc) got="$(oc_manifest_version "$base")" ;;
+    ps) got="$(ps_module_version "$base")" ;;
+  esac
+  [ "$got" = "$VERSION" ] || fail "после штамповки $platform: версия '$got', ожидалось '$VERSION'"
+}
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -86,6 +184,8 @@ build_wc() {
   dest="$DIST/wc"; mkdir -p "$dest"
   mkdir -p "$stage/aneepay"
   cp -a "$SRC_WC/." "$stage/aneepay/"
+  stamp_version_wc "$stage/aneepay"
+  assert_version_in_staging wc "$stage/aneepay"
   zip_stage "$stage" "$dest/aneepay.zip"
   echo "   -> $dest/aneepay.zip"
 }
@@ -99,6 +199,8 @@ build_oc() {
   cp -a "$SRC_OC/catalog/." "$stage/upload/catalog/"
   cp -a "$SRC_OC/system/." "$stage/upload/system/"
   [ -f "$SRC_OC/install.xml" ] && cp "$SRC_OC/install.xml" "$stage/install.xml"
+  stamp_version_oc "$stage"
+  assert_version_in_staging oc "$stage"
   zip_stage "$stage" "$dest/aneepay-${VERSION}.ocmod.zip"
   echo "   -> $dest/aneepay-${VERSION}.ocmod.zip"
 }
@@ -112,6 +214,9 @@ build_ps() {
   # config.xml is gitignored (**/config.xml): generate it from the canonical
   # VERSION so a fresh checkout always ships a matching module manifest. The
   # write happens after the copy so it wins over any stale local copy.
+  # $this->version is stamped for the same reason.
+  stamp_version_ps "$stage/ps_aneepay"
+  assert_version_in_staging ps "$stage/ps_aneepay"
   write_ps_config "$stage/ps_aneepay/config.xml"
   zip_stage "$stage" "$dest/ps_aneepay.zip"
   echo "   -> $dest/ps_aneepay.zip"
@@ -144,6 +249,8 @@ EOF
 
 platforms=("$PLATFORM")
 [ "$PLATFORM" = "all" ] && platforms=(wc oc ps)
+
+verify_versions
 
 mkdir -p "$DIST"
 

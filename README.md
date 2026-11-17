@@ -26,8 +26,11 @@ Status: all three plugins are working implementations.
 ```
 
 The script lints PHP (`php -l`), validates the platform structure/manifest and
-writes the artifact to `dist/<platform>/`. The version is read from `VERSION`
-(or passed as an argument). Each platform is packaged with the correct root path.
+writes the artifact to `dist/<platform>/`. `VERSION` is the only place the
+release version is set: the build fails if the WooCommerce header/`ANEEPAY_VERSION`,
+OpenCart `install.xml` or PrestaShop `$version` diverge from it, and the version
+is stamped into the staged copy before zipping. Each platform is packaged with
+the correct root path.
 
 ## Local development
 

@@ -11,6 +11,6 @@ folder can be packaged into its own artifact and released independently.
 
 Shared materials:
 
-- `VERSION` — the shared release version (overridable by a flag or tag).
+- `VERSION` — the shared release version; the single source of truth for the build.
 - `scripts/pack.sh` — builds each platform artifact.
 - `docker/` — local test shops per platform.
