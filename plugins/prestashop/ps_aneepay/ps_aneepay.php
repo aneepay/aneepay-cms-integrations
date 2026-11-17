@@ -301,9 +301,17 @@ class Ps_Aneepay extends PaymentModule {
 		$links = $this->context->link;
 
 		$option = $this->newPaymentOption();
+
+		// The payment controller creates an order and a payment, so it must not
+		// be reachable by a bare GET (a link or an <img> would spam orders into
+		// the buyer's session). Every rendered checkout issues a one-time,
+		// cart-bound token that the controller verifies before creating anything.
+		$id_cart = (int) $this->context->cart->id;
+		$params = $id_cart > 0 ? array('token' => $this->issuePaymentToken($id_cart)) : array();
+
 		$option->setModuleName($this->name)
 			->setCallToActionText($this->l('Pay with crypto (USDT/USDC/DAI)'))
-			->setAction($links->getModuleLink($this->name, 'payment', array(), true));
+			->setAction($links->getModuleLink($this->name, 'payment', $params, true));
 
 		$breakdown = $this->getCheckoutBreakdown();
 
@@ -927,6 +935,251 @@ class Ps_Aneepay extends PaymentModule {
 	 */
 	public function moduleLink($controller) {
 		return $this->context->link->getModuleLink($this->name, $controller, array(), true);
+	}
+
+	/**
+	 * Cookie holding the live payment-entry tokens.
+	 *
+	 * PrestaShop's Cookie is a single encrypted jar: __set() ignores its third
+	 * argument, so a per-key expiry is impossible and the TTL lives inside the
+	 * value instead.
+	 */
+	const PAYMENT_TOKEN_COOKIE = 'aneepay_csrf';
+
+	/** Seconds a payment token stays valid. */
+	const PAYMENT_TOKEN_TTL = 1800;
+
+	/** How many tokens stay live at once (tabs, re-rendered checkout). */
+	const PAYMENT_TOKEN_MAX = 3;
+
+	/** Cookie holding recent payment attempts (rate limit). */
+	const PAYMENT_ATTEMPTS_COOKIE = 'aneepay_pay_attempts';
+
+	/** Attempts allowed per window. */
+	const PAYMENT_ATTEMPT_LIMIT = 5;
+
+	/** Rate-limit window in seconds. */
+	const PAYMENT_ATTEMPT_WINDOW = 600;
+
+	/**
+	 * Issue a one-time token for entering the payment controller.
+	 *
+	 * The token is bound to the cart: the signature covers the cart id, so a
+	 * token minted for another cart is useless. Up to PAYMENT_TOKEN_MAX tokens
+	 * stay valid at once, so a re-rendered checkout or a second tab does not
+	 * invalidate the button the buyer is about to click.
+	 *
+	 * @param int $id_cart Cart id.
+	 * @return string Token to put into the payment action URL.
+	 */
+	public function issuePaymentToken($id_cart) {
+		$id_cart = (int) $id_cart;
+		$token = $this->makePaymentToken($id_cart);
+
+		$tokens = $this->readPaymentTokens();
+		$tokens[] = $token;
+
+		if (count($tokens) > self::PAYMENT_TOKEN_MAX) {
+			$tokens = array_slice($tokens, -self::PAYMENT_TOKEN_MAX);
+		}
+
+		$this->context->cookie->__set(self::PAYMENT_TOKEN_COOKIE, implode(',', $tokens));
+
+		return $token;
+	}
+
+	/**
+	 * Consume a token: a token works once, for the cart it was issued for.
+	 *
+	 * @param string $token   Token from the request.
+	 * @param int    $id_cart Cart id.
+	 * @return bool Whether the token was valid and is now spent.
+	 */
+	public function consumePaymentToken($token, $id_cart) {
+		$token = trim((string) $token);
+
+		if ('' === $token) {
+			return false;
+		}
+
+		$tokens = $this->readPaymentTokens();
+		$raw_count = count($this->rawPaymentTokens());
+		$remaining = array();
+		$matched = false;
+		$valid = false;
+
+		foreach ($tokens as $candidate) {
+			if (!$matched && hash_equals($candidate, $token)) {
+				$matched = true;
+				$valid = $this->paymentTokenMatchesCart($candidate, (int) $id_cart);
+
+				continue;
+			}
+
+			$remaining[] = $candidate;
+		}
+
+		if ($matched) {
+			$this->context->cookie->__set(self::PAYMENT_TOKEN_COOKIE, implode(',', $remaining));
+		} elseif (count($tokens) !== $raw_count) {
+			// Nothing matched, but the jar held expired/garbage entries: drop them.
+			$this->context->cookie->__set(self::PAYMENT_TOKEN_COOKIE, implode(',', $remaining));
+		}
+
+		return $valid;
+	}
+
+	/**
+	 * Whether the buyer has exhausted the payment-attempt budget.
+	 *
+	 * @return bool
+	 */
+	public function paymentAttemptsExceeded() {
+		return count($this->recentPaymentAttempts()) >= self::PAYMENT_ATTEMPT_LIMIT;
+	}
+
+	/**
+	 * Record one accepted payment attempt.
+	 *
+	 * @return void
+	 */
+	public function recordPaymentAttempt() {
+		$attempts = $this->recentPaymentAttempts();
+		$attempts[] = time();
+
+		$this->context->cookie->__set(self::PAYMENT_ATTEMPTS_COOKIE, implode(',', $attempts));
+	}
+
+	/**
+	 * Attempt timestamps still inside the rate-limit window.
+	 *
+	 * @return int[]
+	 */
+	protected function recentPaymentAttempts() {
+		$raw = isset($this->context->cookie->{self::PAYMENT_ATTEMPTS_COOKIE})
+			? (string) $this->context->cookie->{self::PAYMENT_ATTEMPTS_COOKIE}
+			: '';
+
+		if ('' === $raw) {
+			return array();
+		}
+
+		$since = time() - self::PAYMENT_ATTEMPT_WINDOW;
+		$recent = array();
+
+		foreach (explode(',', $raw) as $stamp) {
+			$stamp = trim($stamp);
+
+			if (ctype_digit($stamp) && (int) $stamp >= $since) {
+				$recent[] = (int) $stamp;
+			}
+		}
+
+		return $recent;
+	}
+
+	/**
+	 * Live (non-expired, well-formed) tokens from the cookie.
+	 *
+	 * @return string[]
+	 */
+	protected function readPaymentTokens() {
+		$live = array();
+
+		foreach ($this->rawPaymentTokens() as $token) {
+			if (preg_match('/^[a-f0-9]{32}\.[0-9]{10}\.[a-f0-9]{32}$/', $token) && $this->paymentTokenExpiry($token) >= time()) {
+				$live[] = $token;
+			}
+		}
+
+		return $live;
+	}
+
+	/**
+	 * Every entry in the token cookie, unfiltered.
+	 *
+	 * @return string[]
+	 */
+	protected function rawPaymentTokens() {
+		$raw = isset($this->context->cookie->{self::PAYMENT_TOKEN_COOKIE})
+			? (string) $this->context->cookie->{self::PAYMENT_TOKEN_COOKIE}
+			: '';
+
+		if ('' === $raw) {
+			return array();
+		}
+
+		$tokens = array();
+
+		foreach (explode(',', $raw) as $token) {
+			$token = trim($token);
+
+			if ('' !== $token) {
+				$tokens[] = $token;
+			}
+		}
+
+		return $tokens;
+	}
+
+	/**
+	 * Mint "<random>.<expiry>.<mac>".
+	 *
+	 * @param int $id_cart Cart id.
+	 * @return string
+	 */
+	protected function makePaymentToken($id_cart) {
+		$random = bin2hex(random_bytes(16));
+		$expiry = time() + self::PAYMENT_TOKEN_TTL;
+
+		return $random . '.' . $expiry . '.' . $this->signPaymentToken($random, $expiry, (int) $id_cart);
+	}
+
+	/**
+	 * @param string $token Token.
+	 * @return int Expiry timestamp from the token.
+	 */
+	protected function paymentTokenExpiry($token) {
+		$parts = explode('.', (string) $token);
+
+		return isset($parts[1]) && ctype_digit($parts[1]) ? (int) $parts[1] : 0;
+	}
+
+	/**
+	 * Whether a token was minted for this cart by this shop.
+	 *
+	 * @param string $token   Token.
+	 * @param int    $id_cart Cart id.
+	 * @return bool
+	 */
+	protected function paymentTokenMatchesCart($token, $id_cart) {
+		$parts = explode('.', (string) $token);
+
+		if (3 !== count($parts)) {
+			return false;
+		}
+
+		list($random, $expiry, $mac) = $parts;
+
+		if ($this->paymentTokenExpiry($token) < time()) {
+			return false;
+		}
+
+		return hash_equals($this->signPaymentToken($random, (int) $expiry, $id_cart), (string) $mac);
+	}
+
+	/**
+	 * @param string $random Random part of the token.
+	 * @param int    $expiry Expiry timestamp.
+	 * @param int    $id_cart Cart id.
+	 * @return string
+	 */
+	protected function signPaymentToken($random, $expiry, $id_cart) {
+		return substr(
+			hash_hmac('sha256', 'csrf|' . $random . '|' . (int) $expiry . '|' . (int) $id_cart, $this->orderCookieSecret()),
+			0,
+			32
+		);
 	}
 
 	/**

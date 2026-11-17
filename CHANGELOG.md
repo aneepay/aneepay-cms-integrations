@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sandbox guard: a payment from Amoy cannot complete a live order (and a live
   payment cannot complete a sandbox order). The mismatched event is recorded as
   ignored, logged at error level and acknowledged with HTTP 200.
+- PrestaShop payment entry is CSRF-protected: the checkout issues a one-time,
+  cart-bound token that `payment.php` verifies with `hash_equals` before
+  creating an order, so a bare GET can no longer spam orders into a buyer's
+  session. Invalid entries answer 403, and at most 5 payment attempts per
+  10 minutes are accepted.
 
 ### Changed
 

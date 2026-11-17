@@ -52,6 +52,26 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 			Tools::redirect($home);
 		}
 
+		// From here on the controller creates an order and a payment: that must
+		// only happen for a request started on this shop's checkout page.
+		$api = $this->module->getApi();
+
+		if ($this->module->paymentAttemptsExceeded()) {
+			$api->write_log('payment', 'Payment entry rate limit hit for cart #' . (int) $cart->id, 'warning');
+			$this->redirectWithNotice($home, 'error', $this->module->l('Too many payment attempts. Please wait a few minutes and try again.'));
+
+			return;
+		}
+
+		if (!$this->module->consumePaymentToken(Tools::getValue('token', ''), (int) $cart->id)) {
+			$api->write_log('payment', 'Rejected payment entry without a valid token (cart #' . (int) $cart->id . ')', 'warning');
+			$this->denyRequest();
+
+			return;
+		}
+
+		$this->module->recordPaymentAttempt();
+
 		// Create the order FIRST so the payment references the real order id
 		// and a failed validateOrder() cannot leave an orphan payment behind.
 		$pendingState = (int) Configuration::get('ANEEPAY_PENDING_STATE');
@@ -76,7 +96,6 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 			return;
 		}
 
-		$api = $this->module->getApi();
 		$api->set_config('store_rate', $this->module->getStoreRate((string) $currency->iso_code));
 
 		try {
@@ -153,5 +172,28 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 		$this->context->cookie->__set('aneepay_error', $message, time() + 600);
 
 		Tools::redirect($url);
+	}
+
+	/**
+	 * Refuse a payment request that did not start on this shop's checkout.
+	 *
+	 * Answers 403 and renders a friendly page instead of an order: the buyer
+	 * only gets here with a stale tab or a bookmarked/expired link.
+	 *
+	 * @return void
+	 */
+	protected function denyRequest() {
+		if (!headers_sent()) {
+			header('HTTP/1.1 403 Forbidden');
+		}
+
+		$this->context->smarty->assign(array(
+			'error_title'   => $this->module->l('Payment session expired'),
+			'error_message' => $this->module->l('This payment page is no longer valid. Please return to your cart and start the payment again — nothing has been charged.'),
+			'cart_url'      => $this->context->link->getPageLink('order', true),
+			'shop_url'      => $this->context->link->getPageLink('index'),
+		));
+
+		$this->setTemplate('module:ps_aneepay/views/templates/front/error.tpl');
 	}
 }

@@ -15,12 +15,13 @@ ps_aneepay/
     AneePayWebhook.php                (resolve order + apply OrderHistory)
     AneePayEventLog.php               (webhook dedup by event_id + is_sandbox guard)
   controllers/front/
-    payment.php    (validateOrder + redirect to checkout_url)
+    payment.php    (CSRF token gate + validateOrder + redirect to checkout_url)
     webhook.php    (STATUS_URL — HMAC verify, fail-closed)
     success.php / fail.php            (result pages)
     cron.php       (poll pending orders)
     check.php      (AJAX "I already paid" / polling)
   views/templates/front/result.tpl
+  views/templates/front/error.tpl     (expired/invalid payment session)
   logo.png
   index.php                           (in every folder — PS requirement)
 ```
@@ -37,6 +38,11 @@ ps_aneepay/
 - Setup: Modules → Module manager → AneePay → Configure. Enter the Account ID +
   Webhook Secret. Save. Order states are configurable (defaults: pending =
   "Awaiting payment", paid = "Payment accepted", failed/cancelled accordingly).
+- `payment.php` creates an order and a payment, so it is not reachable by a bare
+  GET: the checkout renders a one-time, cart-bound token into the payment
+  action, the controller verifies it with `hash_equals` and spends it. Invalid
+  or expired entries answer 403 without touching the cart, and more than 5
+  attempts in 10 minutes are refused.
 - The settings page adds a SANDBOX/LIVE badge, a "Test connection" button
   (`GET /accounts/{id}/payments`), an offline conversion preview, a request log
   panel (`ps_aneepay_log`) and the copyable STATUS/SUCCESS/FAIL/cron URLs.
