@@ -14,3 +14,4 @@ $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_69d1c4b38c1e28dc6310d1d13fb78c7f'] 
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_dba178d2cabf117f97540669eb17d237'] = 'Unable to create the order. Please try again.';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_5c9fdcfc61d73994a2bf19a7175d7e58'] = 'Payment session expired';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_6b01733a39b8f9d35e4618b6d9b28009'] = 'This payment page is no longer valid. Please return to your cart and start the payment again — nothing has been charged.';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_824a78908ffc3f48cefba98aaf88402f'] = 'The amount is an estimate: the rate is fixed when you start the payment, so it can change slightly until then.';

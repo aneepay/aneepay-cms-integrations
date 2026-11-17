@@ -54,3 +54,10 @@ msgid ""
 "We could not create the payment for this order. Please return to your cart "
 "and try again."
 msgstr ""
+
+#. Shown under the checkout conversion breakdown.
+#: includes/class-wc-gateway-crypto.php
+msgid ""
+"This amount is an estimate: the rate is fixed when you start the payment, "
+"so it can change slightly until then."
+msgstr ""

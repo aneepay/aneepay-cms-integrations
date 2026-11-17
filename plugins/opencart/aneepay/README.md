@@ -38,7 +38,9 @@ install.xml                                            # ocmod manifest (add-on 
   toggle Test mode (Amoy/USDC).
 - Amount semantics: token amount = store_total converted via Frankfurter/ECB
   (auto) + store rate fallback + manual rate; rounded **up** (ceil) in the
-  merchant's favour.
+  merchant's favour. The rate and token amount are fixed when the payment is
+  created; the checkout breakdown is an estimate and says so, while the result
+  page shows the fixed amount that was charged.
 - Order metadata is stored in the `aneepay_order` table; the webhook resolves the
   order by `payment_id` / `operation_id` (128-bit int, kept exact) or `Order #N`.
 - Webhook deliveries are deduplicated in the `aneepay_event` table by `event_id`

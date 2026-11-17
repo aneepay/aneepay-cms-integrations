@@ -421,6 +421,7 @@ class Ps_Aneepay extends PaymentModule {
 		return array(
 			'token_amount' => number_format($token_amount, 2, '.', ''),
 			'token'        => strtoupper($api->get_token()),
+			'note'         => $this->l('The amount is an estimate: the rate is fixed when you start the payment, so it can change slightly until then.'),
 			'order_label'  => Tools::displayPrice($total, $currency),
 			'currency'     => $iso,
 			'usd_label'    => $usd_label,

@@ -11,6 +11,10 @@
 		<p>AneePay payment id: {{ payment_id }}</p>
 	{% endif %}
 
+	{% if token_amount and token %}
+		<p>{{ text_you_pay }}: {{ token_amount }} {{ token }}</p>
+	{% endif %}
+
 	<p>
 		<button id="aneepay-i-paid" class="btn btn-primary">{{ button_i_paid }}</button>
 	</p>

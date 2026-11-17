@@ -56,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The token amount and rate are captured when the payment is created and shown
+  as the amount to pay on the waiting and result screens (WooCommerce result
+  page, OpenCart result page, PrestaShop pending screen). The checkout
+  conversion card is labelled as an estimate: the rate is only fixed when the
+  payment starts.
 - Request tracing is opt-in on every platform: the `debug` option now gates
   only `info` entries (one row per API call). Errors and warnings are always
   logged, so production incidents stay diagnosable, and log rows older than
@@ -73,9 +78,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aborts the batch, each run is bounded (oldest 50 orders in WooCommerce, 100 in
   OpenCart/PrestaShop, 7 days max), and `get_payment()` returns `null` instead
   of throwing while exposing the HTTP status.
-
-### Changed
-
 - CI: a required `verify` job (tag must equal `VERSION`, version sources, lint)
   now gates both `pack` and `release`; the release publishes `SHA256SUMS`.
 - Webhook `timestamp` is validated for presence and type only — the 24-hour

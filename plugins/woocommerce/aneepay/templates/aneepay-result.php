@@ -55,6 +55,16 @@ get_header();
 						<code><?php echo esc_html( (string) $order->get_meta( '_aneepay_payment_id', true ) ); ?></code>
 					</p>
 				<?php endif; ?>
+				<?php
+				$aneepay_token_amount = (string) $order->get_meta( '_aneepay_token_amount', true );
+				$aneepay_token        = strtoupper( (string) $order->get_meta( '_aneepay_token', true ) );
+				?>
+				<?php if ( '' !== $aneepay_token_amount && '' !== $aneepay_token ) : ?>
+					<p>
+						<strong><?php esc_html_e( 'You pay', 'aneepay-crypto-gateway' ); ?>:</strong>
+						<?php echo esc_html( $aneepay_token_amount . ' ' . $aneepay_token ); ?>
+					</p>
+				<?php endif; ?>
 				<?php if ( $order->get_meta( '_aneepay_tx_hash', true ) ) : ?>
 					<p>
 						<strong><?php esc_html_e( 'Transaction', 'aneepay-crypto-gateway' ); ?>:</strong>

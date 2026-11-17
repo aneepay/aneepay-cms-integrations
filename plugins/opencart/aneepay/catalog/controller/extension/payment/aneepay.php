@@ -265,6 +265,13 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$html .= sprintf('You will pay %01.2f %s', (float) $converted['token_amount'], $token);
 		$html .= ' <small>(' . number_format((float) $converted['usd_amount'], 2, '.', '');
 		$html .= ' USD &middot; ' . $this->rate_source_label((string) $converted['source']) . ')</small>';
+
+		$note = (string) $this->language->get('text_rate_note');
+
+		if ('' !== $note && 'text_rate_note' !== $note) {
+			$html .= '<br><small class="aneepay-breakdown-note">' . $note . '</small>';
+		}
+
 		$html .= '</span>';
 
 		return $html;
@@ -517,6 +524,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'total'           => '',
 			'currency'        => (string) $this->config->get('config_currency'),
 			'token'           => '',
+			'token_amount'    => '',
 			'payment_id'      => '',
 			'tx_hash'         => '',
 			'checkout_url'    => '',
@@ -526,6 +534,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'text_failed'     => $this->language->get('text_failed'),
 			'text_pending'    => $this->language->get('text_pending'),
 			'text_awaiting'   => $this->language->get('text_awaiting'),
+			'text_you_pay'    => $this->language->get('text_you_pay'),
 			'button_i_paid'   => $this->language->get('button_i_paid'),
 			'checking_label'  => $this->language->get('text_checking'),
 			'shop_url'        => $this->url->link('common/home', '', true),
@@ -546,6 +555,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 			if ($mapping) {
 				$facing['token']      = strtoupper((string) $mapping['token']);
+				$facing['token_amount'] = trim((string) $mapping['token_amount']);
 				$facing['payment_id'] = (string) $mapping['payment_id'];
 				$facing['checkout_url'] = (string) $mapping['checkout_url'];
 			}

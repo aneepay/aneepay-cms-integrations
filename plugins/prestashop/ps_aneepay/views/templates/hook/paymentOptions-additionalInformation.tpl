@@ -7,6 +7,7 @@
 .aneepay-checkout-breakdown .aneepay-breakdown-title{margin:0 0 4px;font-weight:600;}
 .aneepay-checkout-breakdown ul{margin:0;padding:0 0 0 14px;}
 .aneepay-checkout-breakdown .aneepay-breakdown-source{color:#8a8a8a;}
+.aneepay-checkout-breakdown .aneepay-breakdown-note{margin:6px 0 0;color:#8a8a8a;}
 </style>{/literal}
 {if isset($aneepay_breakdown)}
 <div class="aneepay-checkout-breakdown">
@@ -19,5 +20,6 @@
 		{/if}
 		<li class="aneepay-breakdown-source">{$aneepay_breakdown.rate_source}</li>
 	</ul>
+	<p class="aneepay-breakdown-note">{$aneepay_breakdown.note|escape:'html':'UTF-8'}</p>
 </div>
 {/if}

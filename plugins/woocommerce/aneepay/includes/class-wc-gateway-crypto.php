@@ -907,6 +907,7 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 				<?php endif; ?>
 				<li class="aneepay-breakdown-source"><?php echo esc_html( $rate_source ); ?></li>
 			</ul>
+			<p class="aneepay-breakdown-note"><?php esc_html_e( 'This amount is an estimate: the rate is fixed when you start the payment, so it can change slightly until then.', 'aneepay-crypto-gateway' ); ?></p>
 		</div>
 		<?php
 		return ob_get_clean();

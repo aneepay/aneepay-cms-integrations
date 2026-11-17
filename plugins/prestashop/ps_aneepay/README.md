@@ -50,6 +50,9 @@ ps_aneepay/
   panel (`ps_aneepay_log`) and the copyable STATUS/SUCCESS/FAIL/cron URLs.
 - Amount semantics: token amount = store total converted via Frankfurter/ECB
   (auto) + store `Currency` rate fallback + manual rate; rounded **up** (ceil).
+  The rate and token amount are fixed when the payment is created; the checkout
+  breakdown is an estimate and says so, while the pending and result screens
+  show the fixed amount that was charged.
 - Order metadata is stored in the `ps_aneepay_order` table; the webhook resolves
   the order by `payment_id` / `operation_id` (128-bit int, kept exact) or `#N`.
 - Webhook deliveries are deduplicated in the `ps_aneepay_event` table by
