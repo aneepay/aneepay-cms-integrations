@@ -1,7 +1,7 @@
 <?php
 /**
- * Webhook endpoint (STATUS_URL). Verifies the HMAC-SHA256 signature and applies
- * the payment status to the matching order.
+ * Webhook endpoint (STATUS_URL). Verifies the HMAC-SHA256 signature, rejects
+ * duplicates and applies the payment status to the matching order.
  */
 class Ps_AneepayWebhookModuleFrontController extends ModuleFrontController {
 	public function init() {
@@ -32,25 +32,42 @@ class Ps_AneepayWebhookModuleFrontController extends ModuleFrontController {
 			$this->respond(400, array('success' => false));
 		}
 
-		// Reject replayed webhooks: the payload timestamp must not be older than 24h.
-		if (isset($params['timestamp'])) {
-			$ts = (float) $params['timestamp'];
-
-			if ($ts > 0 && (time() - $ts) > 86400) {
-				$this->respond(400, array('success' => false, 'error' => 'stale_timestamp'));
-			}
-		}
-
-		$webhook = new AneePayWebhook($api, new AneePayOrder(), $module->getStateMap());
+		$orders  = new AneePayOrder();
+		$webhook = new AneePayWebhook($api, $orders, $module->getStateMap());
 		$id_order = $webhook->resolveOrderId($params);
 
 		if (!$id_order) {
+			// Not recorded: a retry after the order mapping is committed must
+			// still be able to resolve.
 			$this->respond(404, array('success' => false));
 		}
 
-		$webhook->apply((int) $id_order, (string) $params['status'], $this->note((string) $params['status'], $params));
+		$id_order  = (int) $id_order;
+		$key       = AneePayEventLog::dedupKey($params, $body);
+		$order_ref = !empty($params['payment_id']) && is_scalar($params['payment_id'])
+			? (string) $params['payment_id']
+			: '#' . $id_order;
 
-		$this->respond(200, array('success' => true, 'status' => (string) $params['status']));
+		// At-least-once delivery: the first claim wins, retries are no-ops.
+		if (!AneePayEventLog::claim($key, $params, $order_ref)) {
+			$this->respond(200, array(
+				'success'   => true,
+				'duplicate' => true,
+				'status'    => $status,
+			));
+		}
+
+		try {
+			$webhook->apply($id_order, $status, $this->note($status, $params));
+		} catch (Throwable $e) {
+			// Give the vendor retry a chance: the event must not stay claimed.
+			AneePayEventLog::release($key);
+			$api->write_log('webhook', 'Failed to apply status for order #' . $id_order . ': ' . $e->getMessage(), 'error');
+
+			$this->respond(500, array('success' => false));
+		}
+
+		$this->respond(200, array('success' => true, 'status' => $status));
 	}
 
 	/**

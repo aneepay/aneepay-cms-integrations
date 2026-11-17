@@ -23,6 +23,10 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		if (!class_exists('AneePay_Webhook')) {
 			require_once $base . 'webhook.php';
 		}
+
+		if (!class_exists('AneePay_Event_Log')) {
+			require_once $base . 'event-log.php';
+		}
 	}
 
 	/**
@@ -263,17 +267,6 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			return;
 		}
 
-		// Reject replayed webhooks: the payload timestamp must not be older than 24h.
-		if (isset($params['timestamp'])) {
-			$ts = (float) $params['timestamp'];
-
-			if ($ts > 0 && (time() - $ts) > 86400) {
-				$this->response->addHeader('HTTP/1.1 400 Bad Request');
-				$this->response->setOutput('{"success":false,"error":"stale_timestamp"}');
-				return;
-			}
-		}
-
 		$this->load->model('extension/payment/aneepay');
 		$this->load->model('checkout/order');
 
@@ -281,12 +274,34 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$order_id = $webhook->resolve_order_id($params);
 
 		if (!$order_id) {
+			// Deliberately not recorded: the vendor retries, and a retry can
+			// resolve once the payment mapping has been committed.
 			$this->response->addHeader('HTTP/1.1 404 Not Found');
 			$this->response->setOutput('{"success":false}');
 			return;
 		}
 
-		$webhook->apply($order_id, $status, $this->status_note($status, $params));
+		$events    = new AneePay_Event_Log($this->db);
+		$event_key = $events->dedup_key($params, $body);
+
+		if (!$events->claim($event_key, $params, (string) $order_id, 'applied')) {
+			// At-least-once delivery: the same event was already applied.
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput('{"success":true,"duplicate":true}');
+			return;
+		}
+
+		try {
+			$webhook->apply($order_id, $status, $this->status_note($status, $params));
+		} catch (Throwable $e) {
+			// The retry must not be swallowed as a duplicate.
+			$events->release($event_key);
+			$client->write_log('webhook', $e->getMessage(), 'error');
+
+			$this->response->addHeader('HTTP/1.1 500 Internal Server Error');
+			$this->response->setOutput('{"success":false}');
+			return;
+		}
 
 		$this->response->addHeader('Content-Type: application/json');
 		$this->response->setOutput(json_encode(array('success' => true, 'status' => $status)));

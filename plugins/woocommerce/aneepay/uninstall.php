@@ -22,6 +22,11 @@ if ( ! $delete_data ) {
 delete_option( 'woocommerce_aneepay_crypto_settings' );
 delete_option( 'aneepay_request_log' );
 
+// The webhook event log is plugin-owned bookkeeping, not order history.
+global $wpdb;
+$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'aneepay_event' );
+delete_option( 'aneepay_events_schema' );
+
 // Fiat-rate transients (`aneepay_fiat_rate_<currency>`) are dynamic and
 // short-lived (hourly TTL); they are left to expire on their own rather than
 // guessing the set of currency codes.

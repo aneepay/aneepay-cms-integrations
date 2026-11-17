@@ -44,7 +44,30 @@ class ModelExtensionPaymentAneePay extends Model {
 			KEY `date_added` (`date_added`)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
 
+		$this->createEventTable();
+
 		$this->ensureSchema();
+	}
+
+	/**
+	 * Create the webhook event log table (deduplication of at-least-once
+	 * webhook deliveries).
+	 *
+	 * @return void
+	 */
+	public function createEventTable() {
+		$this->db->query("CREATE TABLE IF NOT EXISTS `" . DB_PREFIX . "aneepay_event` (
+			`event_key` VARCHAR(80) NOT NULL,
+			`event_id` VARCHAR(64) NOT NULL DEFAULT '',
+			`payment_id` VARCHAR(64) NOT NULL DEFAULT '',
+			`order_ref` VARCHAR(64) NOT NULL DEFAULT '',
+			`status` VARCHAR(16) NOT NULL DEFAULT '',
+			`is_sandbox` TINYINT(1) NOT NULL DEFAULT 0,
+			`outcome` VARCHAR(32) NOT NULL DEFAULT '',
+			`date_added` DATETIME NOT NULL,
+			PRIMARY KEY (`event_key`),
+			KEY `date_added` (`date_added`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
 	}
 
 	/**
@@ -66,6 +89,8 @@ class ModelExtensionPaymentAneePay extends Model {
 		if (!$column->num_rows) {
 			$this->db->query("ALTER TABLE `" . $table . "` ADD COLUMN `stock_restored` TINYINT(1) NOT NULL DEFAULT 0");
 		}
+
+		$this->createEventTable();
 	}
 
 	/**
@@ -98,6 +123,7 @@ class ModelExtensionPaymentAneePay extends Model {
 
 		$this->db->query("DROP TABLE IF EXISTS `" . DB_PREFIX . "aneepay_order`");
 		$this->db->query("DROP TABLE IF EXISTS `" . DB_PREFIX . "aneepay_log`");
+		$this->db->query("DROP TABLE IF EXISTS `" . DB_PREFIX . "aneepay_event`");
 	}
 
 	/**

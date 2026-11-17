@@ -19,6 +19,7 @@ aneepay/
   system/library/aneepay/aneepay.php                   # API client + webhook signature + log
   system/library/aneepay/usd-converter.php             # fiat -> USD -> token
   system/library/aneepay/webhook.php                   # resolve order + apply status
+  system/library/aneepay/event-log.php                 # webhook dedup by event_id
 install.xml                                            # ocmod manifest (add-on files)
 ```
 
@@ -39,6 +40,9 @@ install.xml                                            # ocmod manifest (add-on 
   merchant's favour.
 - Order metadata is stored in the `aneepay_order` table; the webhook resolves the
   order by `payment_id` / `operation_id` (128-bit int, kept exact) or `Order #N`.
+- Webhook deliveries are deduplicated in the `aneepay_event` table by `event_id`
+  (or `sha256(body)` for legacy payloads): a retry gets HTTP 200 and changes
+  nothing, rows are pruned after 7 days.
 - Cron is not built into OpenCart: add the cron URL above to your server crontab.
 - Uninstall keeps the `aneepay_order` / `aneepay_log` tables by default; set
   "On uninstall" to "Delete data" in the settings to drop them.

@@ -934,6 +934,8 @@ function aneepay_verify_webhook_signature( $signature, $body, $secret ) {
  * AneePay pushes this payload to the configured STATUS_URL after a payment
  * is confirmed on-chain (only for success):
  * {
+ *   "version": 1,
+ *   "event_id": "8b5f8f2e-...",                            // stable across retries
  *   "operation_id": 1025366559013960798969014288963858567168, // int(payment_id)
  *   "status": "success",
  *   "timestamp": 1755262800.0
@@ -942,7 +944,9 @@ function aneepay_verify_webhook_signature( $signature, $body, $secret ) {
  * The signature (X-AneePay-Signature) is an HMAC-SHA256 hex digest of the
  * raw request body using the webhook_secret. Signature verification is
  * mandatory: without a valid signature the webhook is rejected with 401.
- * Payloads sent by the legacy dApp confirm endpoint
+ * Delivery is at-least-once, so every event is claimed in the event log by
+ * `event_id` (or a hash of the raw body) and a retry is acknowledged without
+ * applying the status twice. Payloads sent by the legacy dApp confirm endpoint
  * (payment_id / order_id / description / operationId) are still accepted for
  * compatibility, but only when signed correctly.
  *
@@ -967,34 +971,42 @@ function aneepay_handle_webhook( $request ) {
 		return new WP_REST_Response( array( 'success' => false ), 400 );
 	}
 
-	$status = isset( $params['status'] ) ? sanitize_key( $params['status'] ) : '';
+	$status = isset( $params['status'] ) && is_scalar( $params['status'] ) ? sanitize_key( (string) $params['status'] ) : '';
 
 	if ( ! in_array( $status, array( 'pending', 'success', 'failed', 'cancelled' ), true ) ) {
 		return new WP_REST_Response( array( 'success' => false ), 400 );
 	}
 
-	// Reject replayed webhooks: the payload timestamp must not be older than 24h.
-	if ( isset( $params['timestamp'] ) ) {
-		$ts = (float) $params['timestamp'];
-
-		if ( $ts > 0 && ( time() - $ts ) > DAY_IN_SECONDS ) {
-			return new WP_REST_Response(
-				array(
-					'success' => false,
-					'error'   => 'stale_timestamp',
-				),
-				400
-			);
-		}
-	}
-
 	$order = aneepay_resolve_order( $params );
 
 	if ( ! $order ) {
+		// Deliberately not recorded: the vendor retries, and a retry can
+		// resolve once the payment mapping has been committed.
 		return new WP_REST_Response( array( 'success' => false ), 404 );
 	}
 
-	aneepay_apply_payment_status( $order, $status, $params );
+	$event_key = AneePay_Crypto_Event_Log::dedup_key( $params, $body );
+	$order_ref = (string) $order->get_id();
+
+	if ( ! AneePay_Crypto_Event_Log::claim( $event_key, $params, $order_ref, 'applied' ) ) {
+		return new WP_REST_Response(
+			array(
+				'success'   => true,
+				'duplicate' => true,
+			),
+			200
+		);
+	}
+
+	try {
+		aneepay_apply_payment_status( $order, $status, $params );
+	} catch ( Throwable $e ) {
+		// The retry must not be swallowed as a duplicate.
+		AneePay_Crypto_Event_Log::release( $event_key );
+		$gateway->api_handler->log( 'webhook', $e->getMessage(), 'error' );
+
+		return new WP_REST_Response( array( 'success' => false ), 500 );
+	}
 
 	return new WP_REST_Response(
 		array(

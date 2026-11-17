@@ -45,6 +45,7 @@ if ( ! defined( 'ANEEPAY_PAYMENT_GATEWAY_ID' ) ) {
 }
 
 require_once ANEEPAY_PLUGIN_DIR . 'includes/class-crypto-api-handler.php';
+require_once ANEEPAY_PLUGIN_DIR . 'includes/class-crypto-event-log.php';
 require_once ANEEPAY_PLUGIN_DIR . 'includes/class-usd-converter.php';
 
 /**
@@ -122,6 +123,7 @@ function aneepay_activate_plugin() {
 	}
 
 	aneepay_schedule_sync();
+	AneePay_Crypto_Event_Log::install();
 }
 register_activation_hook( __FILE__, 'aneepay_activate_plugin' );
 

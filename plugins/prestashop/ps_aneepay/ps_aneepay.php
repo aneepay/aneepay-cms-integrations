@@ -12,6 +12,7 @@ require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayApi.php';
 require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayUsdConverter.php';
 require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayOrder.php';
 require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayWebhook.php';
+require_once _PS_MODULE_DIR_ . 'ps_aneepay/classes/AneePayEventLog.php';
 
 class Ps_Aneepay extends PaymentModule {
 	public function __construct() {
@@ -92,11 +93,15 @@ class Ps_Aneepay extends PaymentModule {
 			KEY `date_added` (`date_added`)
 		) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci';
 
+		$sql[] = AneePayEventLog::schemaSql();
+
 		foreach ($sql as $stmt) {
 			if (!Db::getInstance()->execute($stmt)) {
 				return false;
 			}
 		}
+
+		Configuration::updateValue(AneePayEventLog::SCHEMA_OPTION, AneePayEventLog::SCHEMA_VERSION);
 
 		return true;
 	}
@@ -110,6 +115,8 @@ class Ps_Aneepay extends PaymentModule {
 
 		Db::getInstance()->execute('DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'aneepay_order`');
 		Db::getInstance()->execute('DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'aneepay_log`');
+		Db::getInstance()->execute('DROP TABLE IF EXISTS `' . AneePayEventLog::tableName() . '`');
+		Configuration::deleteByName(AneePayEventLog::SCHEMA_OPTION);
 
 		return true;
 	}

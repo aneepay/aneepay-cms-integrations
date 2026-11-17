@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugins without packaging anything.
 - `dist/SHA256SUMS` with the checksums of the built artifacts; artifacts of
   other versions are removed from `dist/<platform>/` before packing.
+- Webhook deduplication on every platform: an event log table
+  (`*_aneepay_event`) claims each delivery by `event_id` (falling back to
+  `sha256(body)` for legacy payloads). A retry is acknowledged with HTTP 200
+  and applies nothing, events are pruned after 7 days, and a claim is released
+  when applying the status fails so the vendor retry is not swallowed.
 
 ### Changed
 
