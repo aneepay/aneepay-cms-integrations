@@ -43,6 +43,22 @@ artifacts of other versions are removed from `dist/<platform>/` first:
 cd dist && sha256sum -c SHA256SUMS
 ```
 
+## Tests
+
+The unit tests run against all three plugins from one PHPUnit run: the platform
+APIs are stubbed in `tests/stubs/`, so no shop is needed. PHP is not required on
+the host — use the same container images as CI:
+
+```bash
+docker run --rm -v "$PWD":/app -w /app composer:2 composer install
+docker run --rm -v "$PWD":/app -w /app php:8.2-cli php vendor/bin/phpunit
+```
+
+Swap `php:8.2-cli` for `php:7.4-cli` to check the oldest supported PHP. CI runs
+the suite on PHP 7.4, 8.0 and 8.3, and each matrix entry also runs
+`./scripts/pack.sh check`, so a syntax error that only parses on 8.x cannot
+reach a release. `vendor/` and `composer.lock` are not committed.
+
 ## Local development
 
 ### WooCommerce
