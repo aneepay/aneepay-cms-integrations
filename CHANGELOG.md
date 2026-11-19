@@ -120,6 +120,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to either absorb AneePay's 0.5% or add it to the customer, but no catalog code
   ever read the setting, so both options charged the same amount. The stored
   option is harmless and is ignored.
+- OpenCart: the **Status Sync Interval** select is gone as well. OpenCart has no
+  scheduler, so the value only described what the merchant was supposed to put in
+  their crontab; nothing read it. The settings page still shows the cron URL and
+  now says the interval is whatever the crontab uses.
 - OpenCart, PrestaShop: `Abandoned Payment Expiry` of `0` now really disables the
   expiry, as the field has always promised and as WooCommerce already did. Both
   crons used to coerce `0` back to 120 minutes, so a shop that asked to keep

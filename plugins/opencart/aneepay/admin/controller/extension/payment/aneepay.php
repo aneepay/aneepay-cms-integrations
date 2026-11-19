@@ -66,7 +66,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'status', 'title', 'description', 'account_id', 'webhook_secret', 'site_domain',
 			'test_mode', 'token', 'network', 'rate_source', 'exchange_rate',
 			'pending_status_id', 'paid_status_id', 'failed_status_id', 'cancelled_status_id',
-			'debug', 'cron_interval', 'expiry_minutes', 'keep_data',
+			'debug', 'expiry_minutes', 'keep_data',
 		);
 
 		foreach ($fields as $field) {
@@ -88,10 +88,6 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 		if ('' === $data['payment_aneepay_rate_source']) {
 			$data['payment_aneepay_rate_source'] = 'auto';
-		}
-
-		if ('' === $data['payment_aneepay_cron_interval']) {
-			$data['payment_aneepay_cron_interval'] = 'every_five_minutes';
 		}
 
 		if ('' === $data['payment_aneepay_expiry_minutes']) {
@@ -140,13 +136,6 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			(string) $data['payment_aneepay_rate_source'],
 			(string) $this->config->get('config_currency'),
 			(string) $data['payment_aneepay_exchange_rate']
-		);
-
-		$data['cron_options'] = array(
-			'every_five_minutes'    => 'Every 5 minutes',
-			'every_ten_minutes'     => 'Every 10 minutes',
-			'every_fifteen_minutes' => 'Every 15 minutes',
-			'every_thirty_minutes'  => 'Every 30 minutes',
 		);
 
 		// Helper blocks.
