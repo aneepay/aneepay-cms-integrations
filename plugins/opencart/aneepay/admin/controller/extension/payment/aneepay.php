@@ -66,7 +66,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'status', 'title', 'description', 'account_id', 'webhook_secret', 'site_domain',
 			'test_mode', 'token', 'network', 'rate_source', 'exchange_rate',
 			'pending_status_id', 'paid_status_id', 'failed_status_id', 'cancelled_status_id',
-			'debug', 'cron_interval', 'expiry_minutes', 'fee_rule', 'keep_data',
+			'debug', 'cron_interval', 'expiry_minutes', 'keep_data',
 		);
 
 		foreach ($fields as $field) {
@@ -96,10 +96,6 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 		if ('' === $data['payment_aneepay_expiry_minutes']) {
 			$data['payment_aneepay_expiry_minutes'] = '120';
-		}
-
-		if ('' === $data['payment_aneepay_fee_rule']) {
-			$data['payment_aneepay_fee_rule'] = 'merchant';
 		}
 
 		if ('' === (string) $data['payment_aneepay_keep_data']) {
@@ -151,11 +147,6 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'every_ten_minutes'     => 'Every 10 minutes',
 			'every_fifteen_minutes' => 'Every 15 minutes',
 			'every_thirty_minutes'  => 'Every 30 minutes',
-		);
-
-		$data['fee_options'] = array(
-			'merchant' => $this->language->get('text_fee_merchant'),
-			'customer' => $this->language->get('text_fee_customer'),
 		);
 
 		// Helper blocks.

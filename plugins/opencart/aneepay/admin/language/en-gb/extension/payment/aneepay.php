@@ -38,15 +38,12 @@ $_['entry_debug']            = 'Debug Log';
 $_['help_debug']             = 'Log every AneePay API request (kept for 14 days). Errors are always logged, even when this is disabled.';
 $_['entry_cron_interval']    = 'Status Sync Interval';
 $_['entry_expiry_minutes']   = 'Abandoned Payment Expiry (minutes)';
-$_['entry_fee_rule']         = 'Fee rule';
 $_['entry_keep_data']        = 'On uninstall';
 
 // Selects
 $_['text_select']        = '— Select —';
 $_['text_auto']          = 'Auto (Frankfurter/ECB) + manual fallback';
 $_['text_manual']        = 'Manual rate only';
-$_['text_fee_merchant']  = 'Merchant absorbs 0.5%';
-$_['text_fee_customer']  = 'Add 0.5% to customer';
 $_['text_keep_data']     = 'Keep data';
 $_['text_delete_data']   = 'Delete data';
 
