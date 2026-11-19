@@ -5,10 +5,24 @@
 set -e
 
 echo "Waiting for the PrestaShop auto-install ..."
-for i in $(seq 1 120); do
-	if php -r 'try { $p = new PDO("mysql:host=db;dbname=prestashop", "ps", "ps"); } catch (Exception $e) { exit(1); } $r = $p->query("SHOW TABLES LIKE \"ps_lang\""); exit($r && $r->fetch() ? 0 : 1);' 2>/dev/null; then
+
+# The image's entrypoint writes /var/www/html/install.lock before running the
+# installer and removes it after a successful run. A fresh volume has no lock
+# for the first seconds, so "no lock" alone means "not started yet": wait for
+# the lock to appear first, then for it to disappear. The database check alone
+# is not enough — ps_lang exists long before the installer is done.
+waited=0
+while [ $waited -lt 120 ]; do
+	if [ -f /var/www/html/app/config/parameters.php ] || [ -f /var/www/html/install.lock ]; then
 		break
 	fi
+	waited=$((waited + 2))
+	sleep 2
+done
+
+waited=0
+while [ -f /var/www/html/install.lock ] && [ $waited -lt 600 ]; do
+	waited=$((waited + 2))
 	sleep 2
 done
 

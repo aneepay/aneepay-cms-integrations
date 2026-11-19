@@ -1,6 +1,6 @@
 services:
   db:
-    image: mariadb:11
+    image: mariadb:11.4.13
     restart: unless-stopped
     environment:
       MARIADB_DATABASE: prestashop
@@ -16,7 +16,7 @@ services:
       retries: 20
 
   prestashop:
-    image: aneepay-prestashop:8.1
+    image: aneepay-prestashop:8.1.7
     build: .
     restart: unless-stopped
     depends_on:
@@ -44,8 +44,10 @@ services:
       - ../../plugins/prestashop/ps_aneepay:/var/www/html/modules/ps_aneepay
       - ./enable_ps.php:/opt/enable_ps.php:ro
   setup:
-    image: aneepay-prestashop:8.1
-    build: .
+    # Reuses the image built by `prestashop` above. Declaring `build:` here too
+    # makes compose build the same tag twice in parallel, and the second export
+    # fails with "image already exists".
+    image: aneepay-prestashop:8.1.7
     depends_on:
       prestashop:
         condition: service_started

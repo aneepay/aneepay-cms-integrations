@@ -1,4 +1,4 @@
-FROM php:7.4-apache
+FROM php:7.4.33-apache
 
 # OpenCart 3.0.3.8 needs mod_rewrite + PHP extensions (see cli_install.php checks).
 RUN a2enmod rewrite

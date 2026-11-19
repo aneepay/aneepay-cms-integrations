@@ -1,4 +1,4 @@
-FROM prestashop/prestashop:8.1
+FROM prestashop/prestashop:8.1.7-8.1
 
 # The official image's entrypoint runs the auto-install as www-data, which can't
 # write the fresh named volume's var/cache (mode-bit issue in this environment).

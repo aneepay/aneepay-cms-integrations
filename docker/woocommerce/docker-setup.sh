@@ -20,8 +20,10 @@ if ! wp core is-installed --allow-root >/dev/null 2>&1; then
 		--skip-email
 fi
 
-echo "Installing WooCommerce ..."
-wp plugin install woocommerce --activate --allow-root
+# Pinned alongside the WordPress image: the latest WooCommerce can raise its
+# "Requires at least" and then no longer runs on the pinned core.
+echo "Installing WooCommerce 11.3.0 ..."
+wp plugin install woocommerce --version=11.3.0 --activate --allow-root
 
 echo "Activating AneePay gateway ..."
 wp plugin activate aneepay --allow-root
