@@ -14,9 +14,9 @@
 # После сборки контрольные суммы артефактов пишутся в dist/SHA256SUMS.
 #
 # Примеры:
-#   ./scripts/pack.sh wc                       # → dist/wc/aneepay.zip
-#   ./scripts/pack.sh oc                       # → dist/oc/aneepay-<ver>.ocmod.zip
-#   ./scripts/pack.sh ps                       # → dist/ps/ps_aneepay.zip
+#   ./scripts/pack.sh wc                       # → dist/wc/woocommerce-aneepay-<ver>.zip
+#   ./scripts/pack.sh oc                       # → dist/oc/opencart-aneepay-<ver>.ocmod.zip
+#   ./scripts/pack.sh ps                       # → dist/ps/prestashop-aneepay-<ver>.zip
 #   ./scripts/pack.sh check                    # версия + линт, без архивов
 set -euo pipefail
 
@@ -190,9 +190,9 @@ src_of() {
 # Artifact name of a platform at the current VERSION.
 artifact_of() {
   case "$1" in
-    wc) echo "$DIST/wc/aneepay.zip" ;;
-    oc) echo "$DIST/oc/aneepay-${VERSION}.ocmod.zip" ;;
-    ps) echo "$DIST/ps/ps_aneepay.zip" ;;
+    wc) echo "$DIST/wc/woocommerce-aneepay-${VERSION}.zip" ;;
+    oc) echo "$DIST/oc/opencart-aneepay-${VERSION}.ocmod.zip" ;;
+    ps) echo "$DIST/ps/prestashop-aneepay-${VERSION}.zip" ;;
   esac
 }
 
@@ -200,9 +200,9 @@ artifact_of() {
 # the fresh one (and SHA256SUMS stays unambiguous).
 clean_platform_dist() {
   case "$1" in
-    wc) rm -f "$DIST/wc/aneepay-"*.zip ;;
-    oc) rm -f "$DIST/oc/aneepay-"*.ocmod.zip ;;
-    ps) rm -f "$DIST/ps/ps_aneepay-"*.zip ;;
+    wc) rm -f "$DIST/wc/woocommerce-aneepay-"*.zip "$DIST/wc/aneepay.zip" ;;
+    oc) rm -f "$DIST/oc/opencart-aneepay-"*.ocmod.zip "$DIST/oc/aneepay-"*.ocmod.zip ;;
+    ps) rm -f "$DIST/ps/prestashop-aneepay-"*.zip "$DIST/ps/ps_aneepay.zip" ;;
   esac
 }
 
@@ -246,8 +246,8 @@ build_wc() {
   cp -a "$SRC_WC/." "$stage/aneepay/"
   stamp_version_wc "$stage/aneepay"
   assert_version_in_staging wc "$stage/aneepay"
-  zip_stage "$stage" "$dest/aneepay.zip"
-  echo "   -> $dest/aneepay.zip"
+  zip_stage "$stage" "$dest/woocommerce-aneepay-${VERSION}.zip"
+  echo "   -> $dest/woocommerce-aneepay-${VERSION}.zip"
 }
 
 build_oc() {
@@ -261,8 +261,8 @@ build_oc() {
   [ -f "$SRC_OC/install.xml" ] && cp "$SRC_OC/install.xml" "$stage/install.xml"
   stamp_version_oc "$stage"
   assert_version_in_staging oc "$stage"
-  zip_stage "$stage" "$dest/aneepay-${VERSION}.ocmod.zip"
-  echo "   -> $dest/aneepay-${VERSION}.ocmod.zip"
+  zip_stage "$stage" "$dest/opencart-aneepay-${VERSION}.ocmod.zip"
+  echo "   -> $dest/opencart-aneepay-${VERSION}.ocmod.zip"
 }
 
 build_ps() {
@@ -278,8 +278,8 @@ build_ps() {
   stamp_version_ps "$stage/ps_aneepay"
   assert_version_in_staging ps "$stage/ps_aneepay"
   write_ps_config "$stage/ps_aneepay/config.xml"
-  zip_stage "$stage" "$dest/ps_aneepay.zip"
-  echo "   -> $dest/ps_aneepay.zip"
+  zip_stage "$stage" "$dest/prestashop-aneepay-${VERSION}.zip"
+  echo "   -> $dest/prestashop-aneepay-${VERSION}.zip"
 }
 
 # Generate the PrestaShop module manifest (config.xml) at the build version.

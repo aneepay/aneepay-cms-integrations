@@ -13,9 +13,9 @@ packaged into a separate artifact.
 
 | Platform         | Folder                                                           | Build                  | Artifact                          |
 | ---------------- | ---------------------------------------------------------------- | ---------------------- | --------------------------------- |
-| WooCommerce      | [`plugins/woocommerce/aneepay`](plugins/woocommerce/aneepay)     | `./scripts/pack.sh wc` | `dist/wc/aneepay.zip`             |
-| OpenCart 3.x     | [`plugins/opencart/aneepay`](plugins/opencart/aneepay)           | `./scripts/pack.sh oc` | `dist/oc/aneepay-<ver>.ocmod.zip` |
-| PrestaShop 1.7/8 | [`plugins/prestashop/ps_aneepay`](plugins/prestashop/ps_aneepay) | `./scripts/pack.sh ps` | `dist/ps/ps_aneepay.zip`          |
+| WooCommerce      | [`plugins/woocommerce/aneepay`](plugins/woocommerce/aneepay)     | `./scripts/pack.sh wc` | `dist/wc/woocommerce-aneepay-<ver>.zip`        |
+| OpenCart 3.x     | [`plugins/opencart/aneepay`](plugins/opencart/aneepay)           | `./scripts/pack.sh oc` | `dist/oc/opencart-aneepay-<ver>.ocmod.zip`     |
+| PrestaShop 1.7/8 | [`plugins/prestashop/ps_aneepay`](plugins/prestashop/ps_aneepay) | `./scripts/pack.sh ps` | `dist/ps/prestashop-aneepay-<ver>.zip`         |
 
 Status: all three plugins work end to end but are in **beta** — known gaps are
 listed in [`docs/limitations-beta.md`](docs/limitations-beta.md). Installation

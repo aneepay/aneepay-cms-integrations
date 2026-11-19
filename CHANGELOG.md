@@ -86,6 +86,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Release archives now carry the platform prefix:
+  `woocommerce-aneepay-<ver>.zip`, `opencart-aneepay-<ver>.ocmod.zip`,
+  `prestashop-aneepay-<ver>.zip`. The archives' contents are unchanged — the
+  folders WordPress, OpenCart and PrestaShop look for are still `aneepay/`,
+  `upload/` + `install.xml` and `ps_aneepay/`.
 - The token amount and rate are captured when the payment is created and shown
   as the amount to pay on the waiting and result screens (WooCommerce result
   page, OpenCart result page, PrestaShop pending screen). The checkout

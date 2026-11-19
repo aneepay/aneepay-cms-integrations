@@ -139,7 +139,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/wc/aneepay.zip
-            dist/oc/aneepay-*.ocmod.zip
-            dist/ps/ps_aneepay.zip
+            dist/wc/woocommerce-aneepay-*.zip
+            dist/oc/opencart-aneepay-*.ocmod.zip
+            dist/ps/prestashop-aneepay-*.zip
             dist/SHA256SUMS
