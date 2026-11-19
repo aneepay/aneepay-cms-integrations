@@ -43,5 +43,10 @@ $token        = strtoupper( (string) $order->get_meta( '_aneepay_token', true ) 
 		<div class="aneepay-payment-actions">
 			<button type="button" class="button aneepay-i-paid"><?php esc_html_e( 'I already paid', 'aneepay-crypto-gateway' ); ?></button>
 		</div>
+
+		<div class="aneepay-poll-paused" hidden>
+			<p><?php esc_html_e( 'Automatic status checks are paused.', 'aneepay-crypto-gateway' ); ?></p>
+			<button type="button" class="button aneepay-check-again"><?php esc_html_e( 'Check again', 'aneepay-crypto-gateway' ); ?></button>
+		</div>
 	</div>
 </div>

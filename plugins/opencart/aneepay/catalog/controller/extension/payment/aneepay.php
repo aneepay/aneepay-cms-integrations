@@ -662,6 +662,8 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			'text_awaiting'   => $this->language->get('text_awaiting'),
 			'text_you_pay'    => $this->language->get('text_you_pay'),
 			'button_i_paid'   => $this->language->get('button_i_paid'),
+			'button_check_again' => $this->language->get('button_check_again'),
+			'text_poll_paused' => $this->language->get('text_poll_paused'),
 			'checking_label'  => $this->language->get('text_checking'),
 			'shop_url'        => $this->url->link('common/home', '', true),
 			'page'            => $is_success ? 'success' : 'fail',

@@ -243,7 +243,9 @@ function aneepay_enqueue_frontend_scripts() {
 		'.aneepay-payment-amount{margin:0 0 12px;}' .
 		'.aneepay-payment-info{background:#f6f7f7;border:1px solid #e0e0e0;border-radius:6px;padding:10px 14px;margin:0 0 16px;text-align:left;font-size:13px;color:#50575e;}' .
 		'.aneepay-payment-info p{margin:0;}' .
-		'.aneepay-payment-actions .button{min-width:160px;}'
+		'.aneepay-payment-actions .button{min-width:160px;}' .
+		'.aneepay-poll-paused[hidden]{display:none;}' .
+		'.aneepay-poll-paused p{margin:12px 0 8px;color:#50575e;}'
 	);
 	wp_enqueue_style( 'aneepay-checkout' );
 }

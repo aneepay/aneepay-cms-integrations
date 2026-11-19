@@ -132,6 +132,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expiry inside the signed value, because its `Cookie::__set()` has no per-key
   lifetime, and leaves the cookie jar's own 20-day expiry alone — `setExpire()`
   there would shorten the shopper's whole session to our TTL.
+- Status polling backs off instead of hammering the API and then going quiet
+  (WooCommerce, OpenCart, PrestaShop): the first check runs after 5 seconds, the
+  next after 15, then every 30 seconds, for at most 30 minutes. When the budget
+  runs out the page stops polling and shows an explicit "Check again" button, so
+  a slow confirmation is not mistaken for a dead page. OpenCart's result page now
+  polls at all — it used to rely on the buyer reloading it by hand.
 
 ## [1.2.0] - 2026-10-22
 

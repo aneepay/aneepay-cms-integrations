@@ -13,12 +13,14 @@ $_['button_confirm']    = 'Confirm order';
 $_['button_retry']      = 'Try again';
 $_['button_shop']       = 'Back to shop';
 $_['button_i_paid']     = 'I already paid';
+$_['button_check_again'] = 'Check again';
 
 // Result pages
 $_['text_success']      = 'Payment successful';
 $_['text_failed']       = 'Payment not completed';
 $_['text_awaiting']     = 'Waiting for the transaction to be confirmed on-chain.';
 $_['text_checking']     = 'Checking…';
+$_['text_poll_paused']  = 'Automatic status checks are paused.';
 
 // Errors shown to the shopper (technical details stay in the request log)
 $_['error_config']      = 'Payments are not available right now. Please try again later or choose another payment method.';

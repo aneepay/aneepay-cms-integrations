@@ -36,3 +36,5 @@ $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_fad857d5c329e6b67a007175c80bc7fe'] 
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_ceea7f7c87cdafea3bdc33323f7264f0'] = 'AneePay did not return the payment list (HTTP %d).';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_82c28e5ee5352be2646077987c6cd455'] = 'Checked %1$d payments: %2$d matched an order, %3$d were updated, %4$d had no order.';
 $_MODULE['<{ps_aneepay}prestashop>ps_aneepay_7b6501c829a16fbd3902900197e774b2'] = 'A payment for this order is already being created. Please wait a moment and refresh the page.';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_b4c5578b3342fb9f19f120e8d2f8906c'] = 'Automatic status checks are paused.';
+$_MODULE['<{ps_aneepay}prestashop>ps_aneepay_7cf37d1bcfb5bc39aed23c66c5e4c892'] = 'Check again';

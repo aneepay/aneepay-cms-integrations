@@ -70,7 +70,10 @@ ps_aneepay/
   real outcome is visible with JavaScript disabled — a failed payment is only
   ever visible through the API, never through a webhook. The page shows paid,
   failed or pending, and "Try again" only for a failed payment, so a buyer who
-  actually paid is never sent back to the checkout.
+  actually paid is never sent back to the checkout. While the payment is pending,
+  the waiting and result screens poll the status (after 5 s, then 15 s, then
+  every 30 s for at most 30 minutes) and offer an explicit "Check again" button
+  once that budget is spent.
 - Webhook deliveries are deduplicated in the `ps_aneepay_event` table by
   `event_id` (or `sha256(body)` for legacy payloads): a retry gets HTTP 200 and
   changes nothing, rows are pruned after 7 days, and a sandbox payment never

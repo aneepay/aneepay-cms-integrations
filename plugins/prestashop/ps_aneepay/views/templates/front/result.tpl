@@ -40,15 +40,50 @@
 		<a href="{$check_url|escape:'html':'UTF-8'}&amp;id_order={$order_id}" class="btn btn-primary" id="aneepay-i-paid">
 			{l s='I already paid' mod='ps_aneepay'}
 		</a>
+		<div class="aneepay-poll-paused" id="aneepay-poll-paused" hidden>
+			<p>{l s='Automatic status checks are paused.' mod='ps_aneepay'}</p>
+			<button type="button" class="btn btn-default" id="aneepay-check-again">{l s='Check again' mod='ps_aneepay'}</button>
+		</div>
 	{/if}
 
 	<p><a href="{$shop_url|escape:'html':'UTF-8'}">{l s='Back to shop' mod='ps_aneepay'}</a></p>
 </div>
 
+{literal}<style>.aneepay-poll-paused[hidden]{display:none;}</style>{/literal}
 {if $state == 'pending' && $order_id}
 <script>
 (function () {
 	var btn = document.getElementById('aneepay-i-paid');
+	var pausedBox = document.getElementById('aneepay-poll-paused');
+	var againBtn = document.getElementById('aneepay-check-again');
+	var DELAYS = [5000, 15000, 30000];
+	var BUDGET = 30 * 60 * 1000;
+	var step = 0;
+	var timer = null;
+	var startedAt = Date.now();
+	var stopped = false;
+
+	function pause() {
+		stopped = true;
+		clearTimeout(timer);
+		if (pausedBox) {
+			pausedBox.hidden = false;
+		}
+	}
+
+	function schedule() {
+		if (stopped) {
+			return;
+		}
+		var delay = DELAYS[Math.min(step, DELAYS.length - 1)];
+		step += 1;
+		if (Date.now() - startedAt + delay > BUDGET) {
+			pause();
+			return;
+		}
+		timer = setTimeout(poll, delay);
+	}
+
 	function poll() {
 		var b = new URLSearchParams();
 		b.append('id_order', {$order_id});
@@ -58,18 +93,45 @@
 			body: b.toString()
 		}).then(function (r) { return r.json(); }).then(function (d) {
 			if (d && (d.status === 'success' || d.status === 'failed' || d.status === 'cancelled')) {
+				clearTimeout(timer);
 				window.location.reload();
+			} else if (d && d.status === 'not_found') {
+				clearTimeout(timer);
+				stopped = true;
+			} else {
+				schedule();
 			}
-		}).catch(function () {});
+		}).catch(function () {
+			schedule();
+		});
 	}
+
+	function restart() {
+		clearTimeout(timer);
+		stopped = false;
+		step = 0;
+		startedAt = Date.now();
+		if (pausedBox) {
+			pausedBox.hidden = true;
+		}
+	}
+
 	if (btn) {
 		btn.addEventListener('click', function (e) {
 			e.preventDefault();
 			btn.textContent = '{l s='Checking…' mod='ps_aneepay'}';
+			restart();
 			poll();
 		});
 	}
-	setTimeout(poll, 5000);
+	if (againBtn) {
+		againBtn.addEventListener('click', function () {
+			restart();
+			poll();
+		});
+	}
+
+	schedule();
 })();
 </script>
 {/if}

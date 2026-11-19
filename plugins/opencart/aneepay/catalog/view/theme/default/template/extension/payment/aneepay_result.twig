@@ -32,6 +32,11 @@
 	<p>
 		<button id="aneepay-i-paid" class="btn btn-primary">{{ button_i_paid }}</button>
 	</p>
+
+	<div id="aneepay-poll-paused" style="display:none">
+		<p>{{ text_poll_paused }}</p>
+		<button id="aneepay-check-again" class="btn btn-default">{{ button_check_again }}</button>
+	</div>
 {% endif %}
 
 <p><a href="{{ shop_url }}">{{ button_shop }}</a></p>
@@ -41,25 +46,80 @@
 (function () {
 	var orderId = {{ order_id|default(0) }};
 	var iPaid = document.getElementById('aneepay-i-paid');
-	if (!orderId || !iPaid) { return; }
-	iPaid.addEventListener('click', function () {
-		iPaid.disabled = true;
-		iPaid.textContent = '{{ checking_label }}';
+	var pausedBox = document.getElementById('aneepay-poll-paused');
+	var againBtn = document.getElementById('aneepay-check-again');
+	var DELAYS = [5000, 15000, 30000];
+	var BUDGET = 30 * 60 * 1000;
+	var step = 0;
+	var timer = null;
+	var startedAt = Date.now();
+	var stopped = false;
+
+	function showPaused(show) {
+		if (pausedBox) { pausedBox.style.display = show ? 'block' : 'none'; }
+	}
+
+	function pause() {
+		stopped = true;
+		clearTimeout(timer);
+		showPaused(true);
+	}
+
+	function schedule() {
+		if (stopped) { return; }
+		var delay = DELAYS[Math.min(step, DELAYS.length - 1)];
+		step += 1;
+		if (Date.now() - startedAt + delay > BUDGET) { pause(); return; }
+		timer = setTimeout(poll, delay);
+	}
+
+	function poll() {
 		var body = new URLSearchParams();
 		body.append('order_id', orderId);
-		fetch('index.php?route=extension/payment/aneepay/check', {
+		return fetch('index.php?route=extension/payment/aneepay/check', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 			body: body.toString()
 		}).then(function (r) { return r.json(); }).then(function (d) {
 			if (d && (d.status === 'success' || d.status === 'failed' || d.status === 'cancelled')) {
+				clearTimeout(timer);
 				window.location.reload();
 			} else {
+				schedule();
+			}
+		}).catch(function () {
+			schedule();
+		});
+	}
+
+	function restart() {
+		clearTimeout(timer);
+		stopped = false;
+		step = 0;
+		startedAt = Date.now();
+		showPaused(false);
+	}
+
+	if (iPaid) {
+		iPaid.addEventListener('click', function () {
+			iPaid.disabled = true;
+			iPaid.textContent = '{{ checking_label }}';
+			restart();
+			poll().then(function () {
 				iPaid.disabled = false;
 				iPaid.textContent = '{{ button_i_paid }}';
-			}
+			});
 		});
-	});
+	}
+
+	if (againBtn) {
+		againBtn.addEventListener('click', function () {
+			restart();
+			poll();
+		});
+	}
+
+	schedule();
 })();
 </script>
 {% endif %}

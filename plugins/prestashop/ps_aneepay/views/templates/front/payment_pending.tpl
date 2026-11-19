@@ -13,6 +13,8 @@
 .aneepay-pending-info{color:#555;margin:12px 0 20px;}
 .aneepay-pending-actions{margin:16px 0;}
 .aneepay-pending-actions .btn{display:inline-block;margin:4px;}
+.aneepay-pending-paused[hidden]{display:none;}
+.aneepay-pending-paused p{color:#555;margin:12px 0 8px;}
 .aneepay-pending-confirm{margin:12px auto;max-width:420px;text-align:left;font-size:13px;color:#555;}
 .aneepay-pending-confirm label{display:flex;gap:8px;align-items:flex-start;cursor:pointer;}
 .aneepay-pending-confirm input{margin-top:2px;flex:0 0 auto;}
@@ -48,6 +50,11 @@
 			<button type="button" class="btn btn-default" id="aneepay-i-paid">{l s='I already paid' mod='ps_aneepay'}</button>
 		</div>
 
+		<div class="aneepay-pending-paused" id="aneepay-poll-paused" hidden>
+			<p>{l s='Automatic status checks are paused.' mod='ps_aneepay'}</p>
+			<button type="button" class="btn btn-default" id="aneepay-check-again">{l s='Check again' mod='ps_aneepay'}</button>
+		</div>
+
 		<p><a href="{$shop_url|escape:'html':'UTF-8'}">{l s='Back to shop' mod='ps_aneepay'}</a></p>
 	</div>
 </div>
@@ -59,12 +66,18 @@
 	var successUrl = '{$success_url|escape:'javascript'}';
 	var failUrl = '{$fail_url|escape:'javascript'}';
 	var orderId = {$order_id};
-	var attempts = 0;
+	var DELAYS = [5000, 15000, 30000];
+	var BUDGET = 30 * 60 * 1000;
+	var step = 0;
+	var timer = null;
+	var startedAt = 0;
+	var stopped = false;
 	var btn = document.getElementById('aneepay-i-paid');
 	var payBtn = document.getElementById('aneepay-pay-now');
 	var confirmBox = document.getElementById('aneepay-confirm');
 	var confirmWrap = document.getElementById('aneepay-confirm-wrap');
-	var interval;
+	var pausedBox = document.getElementById('aneepay-poll-paused');
+	var againBtn = document.getElementById('aneepay-check-again');
 
 	function redirect(status) {
 		if (status === 'success') {
@@ -74,12 +87,28 @@
 		}
 	}
 
-	function poll() {
-		if (attempts >= 40) {
-			clearInterval(interval);
+	function pause() {
+		stopped = true;
+		clearTimeout(timer);
+		if (pausedBox) {
+			pausedBox.hidden = false;
+		}
+	}
+
+	function schedule() {
+		if (stopped) {
 			return;
 		}
-		attempts++;
+		var delay = DELAYS[Math.min(step, DELAYS.length - 1)];
+		step += 1;
+		if (Date.now() - startedAt + delay > BUDGET) {
+			pause();
+			return;
+		}
+		timer = setTimeout(poll, delay);
+	}
+
+	function poll() {
 		var b = new URLSearchParams();
 		b.append('id_order', orderId);
 		fetch(checkUrl, {
@@ -88,18 +117,41 @@
 			body: b.toString()
 		}).then(function (r) { return r.json(); }).then(function (d) {
 			if (d && (d.status === 'success' || d.status === 'failed' || d.status === 'cancelled')) {
-				clearInterval(interval);
+				clearTimeout(timer);
 				redirect(d.status);
 			} else if (d && d.status === 'not_found') {
-				clearInterval(interval);
+				clearTimeout(timer);
+				stopped = true;
+			} else {
+				schedule();
 			}
-		}).catch(function () {});
+		}).catch(function () {
+			schedule();
+		});
+	}
+
+	function restart() {
+		clearTimeout(timer);
+		stopped = false;
+		step = 0;
+		startedAt = Date.now();
+		if (pausedBox) {
+			pausedBox.hidden = true;
+		}
 	}
 
 	if (btn) {
 		btn.addEventListener('click', function (e) {
 			e.preventDefault();
 			btn.textContent = '{l s='Checking…' mod='ps_aneepay'}';
+			restart();
+			poll();
+		});
+	}
+
+	if (againBtn) {
+		againBtn.addEventListener('click', function () {
+			restart();
 			poll();
 		});
 	}
@@ -117,7 +169,7 @@
 		});
 	}
 
-	interval = setInterval(poll, 5000);
+	startedAt = Date.now();
 	poll();
 })();
 </script>
