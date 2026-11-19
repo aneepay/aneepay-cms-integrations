@@ -1,7 +1,9 @@
 # AneePay Crypto Gateway — PrestaShop 1.7 / 8.x
 
-Status: **working implementation** (first pass; mirrors the WooCommerce plugin).
-Reference — `../woocommerce/aneepay`.
+Status: **beta** — the payment flow works end to end. Known gaps are listed in
+[`docs/limitations-beta.md`](../../../docs/limitations-beta.md); installation and
+setup are documented at <https://docs.aneepay.com/cms/prestashop/>.
+(Development reference — this README describes the files, not the user guide.)
 
 ## Files
 

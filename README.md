@@ -17,7 +17,10 @@ packaged into a separate artifact.
 | OpenCart 3.x     | [`plugins/opencart/aneepay`](plugins/opencart/aneepay)           | `./scripts/pack.sh oc` | `dist/oc/aneepay-<ver>.ocmod.zip` |
 | PrestaShop 1.7/8 | [`plugins/prestashop/ps_aneepay`](plugins/prestashop/ps_aneepay) | `./scripts/pack.sh ps` | `dist/ps/ps_aneepay.zip`          |
 
-Status: all three plugins are working implementations.
+Status: all three plugins work end to end but are in **beta** — known gaps are
+listed in [`docs/limitations-beta.md`](docs/limitations-beta.md). Installation
+and setup for each platform are documented at
+<https://docs.aneepay.com/cms/>; these READMEs are the development reference.
 
 ## Build
 

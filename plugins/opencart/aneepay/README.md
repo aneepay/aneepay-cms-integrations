@@ -1,7 +1,9 @@
 # AneePay Crypto Gateway — OpenCart 3.x
 
-Status: **working implementation** (mirrors the WooCommerce plugin).
-Reference implementation — `../woocommerce/aneepay`.
+Status: **beta** — the payment flow works end to end. Known gaps are listed in
+[`docs/limitations-beta.md`](../../../docs/limitations-beta.md); installation and
+setup are documented at <https://docs.aneepay.com/cms/opencart/>.
+(Development reference — this README describes the files, not the user guide.)
 
 ## Files
 
