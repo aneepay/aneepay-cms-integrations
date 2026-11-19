@@ -15,9 +15,13 @@ class WC_Gateway_AneePay_Crypto extends WC_Payment_Gateway {
 	/**
 	 * API handler instance.
 	 *
+	 * Public because the procedural helpers in this file (the AJAX handlers,
+	 * the status sync and the webhook callback) are not methods of this class
+	 * and read it from the outside.
+	 *
 	 * @var AneePay_Crypto_API_Handler
 	 */
-	protected $api_handler;
+	public $api_handler;
 
 	/**
 	 * Constructor.

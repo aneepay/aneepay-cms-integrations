@@ -116,6 +116,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- WooCommerce: the sandbox-mismatch log, the webhook error log, **Sync a
+  payment**, **Reconcile payments** and the cron status sync all crashed with
+  `Cannot access protected property ...::$api_handler`. The gateway kept its API
+  handler protected while the free functions in the same file read it from the
+  outside, so any of those paths that actually reached the API ended in a fatal
+  error instead of an answer. The property is now public, with a comment saying
+  why.
 - OpenCart: the **Fee rule** select is gone from the settings page. It promised
   to either absorb AneePay's 0.5% or add it to the customer, but no catalog code
   ever read the setting, so both options charged the same amount. The stored
