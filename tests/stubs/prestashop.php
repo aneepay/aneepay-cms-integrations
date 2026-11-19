@@ -170,10 +170,58 @@ if ( ! class_exists( 'Order' ) ) {
 		public $pending_state;
 
 		/**
+		 * Internal note, as stored by PrestaShop.
+		 *
+		 * @var string
+		 */
+		public $note = '';
+
+		/**
+		 * Note an order is loaded with.
+		 *
+		 * @var string
+		 */
+		public static $existing_note = '';
+
+		/**
+		 * De-duplicated note lines seen by update().
+		 *
+		 * @var array<int, string>
+		 */
+		public static $notes = array();
+
+		/**
+		 * Full note value written by the last update().
+		 *
+		 * @var string
+		 */
+		public static $last_note = '';
+
+		/**
 		 * @param int $id Order id.
 		 */
 		public function __construct( $id = 0 ) {
-			$this->id = (int) $id;
+			$this->id   = (int) $id;
+			$this->note = self::$existing_note;
+		}
+
+		/**
+		 * Persist the order (the note, in practice).
+		 *
+		 * @return bool
+		 */
+		public function update() {
+			self::$last_note = (string) $this->note;
+
+			foreach ( explode( "\n", (string) $this->note ) as $line ) {
+				$line = trim( $line );
+
+				if ( '' !== $line && ! in_array( $line, self::$notes, true ) ) {
+					self::$notes[] = $line;
+				}
+			}
+
+			return true;
 		}
 
 		/**

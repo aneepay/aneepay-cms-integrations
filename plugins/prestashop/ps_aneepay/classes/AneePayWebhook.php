@@ -141,6 +141,12 @@ class AneePayWebhook {
 
 		$result = $this->order_model->updateStatus($id_order, $status);
 
+		// Keep the merchant-facing note: PrestaShop has no per-history note
+		// column, so it goes to the order's internal note field.
+		if ('' !== trim((string) $note) && Validate::isLoadedObject($order)) {
+			self::addOrderNote($order, (string) $note);
+		}
+
 		// Restore reserved stock on failure/cancellation exactly once.
 		if (in_array($status, array('failed', 'cancelled'), true) && !$this->order_model->isStockRestored($id_order)) {
 			self::restoreOrderStockIfNeeded((int) $id_order, $state_id, $previous_state);
@@ -148,6 +154,30 @@ class AneePayWebhook {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Append a merchant note to the order's internal note field.
+	 *
+	 * PrestaShop 1.7/8 dropped the order_note table: the "internal note" shown
+	 * in the admin order page is a single column on the order itself. A new
+	 * note is therefore appended on its own line instead of replacing whatever
+	 * the merchant wrote there.
+	 *
+	 * @param Order  $order Loaded order.
+	 * @param string $note  Note text.
+	 * @return bool
+	 */
+	public static function addOrderNote($order, $note) {
+		$note = trim((string) $note);
+
+		if ('' === $note || !Validate::isLoadedObject($order)) {
+			return false;
+		}
+
+		$order->note = $order->note ? $order->note . "\n" . $note : $note;
+
+		return (bool) $order->update();
 	}
 
 	/**

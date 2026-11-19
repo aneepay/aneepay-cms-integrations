@@ -153,6 +153,9 @@ final class StatusMappingTest extends StatusMappingContractTestCase {
 		}
 
 		\Order::$states             = array( self::ORDER_ID => 1 );
+		\Order::$existing_note      = '';
+		\Order::$notes              = array();
+		\Order::$last_note          = '';
 		\OrderHistory::$entries     = array();
 		\Context::reset();
 
@@ -196,13 +199,15 @@ final class StatusMappingTest extends StatusMappingContractTestCase {
 	}
 
 	/**
-	 * PrestaShop order history rows carry no note column: the applier passes the
-	 * text to OrderHistory, which stores the state only.
+	 * Order notes written to the order, one per applied status.
+	 *
+	 * PrestaShop has no note column in the order history, so the note lands in
+	 * the order's internal note field; the double records the lines it saw.
 	 *
 	 * @return array<int, string>
 	 */
 	protected function notes(): array {
-		return array();
+		return \Order::$notes;
 	}
 
 	/**
@@ -326,5 +331,50 @@ final class StatusMappingTest extends StatusMappingContractTestCase {
 
 		$this->assertFalse( $this->applyStatus( 'refunded' ) );
 		$this->assertSame( array(), $this->model->updates );
+	}
+
+	/**
+	 * The webhook note lands in the order's internal note field.
+	 *
+	 * @return void
+	 */
+	public function test_records_the_note_on_the_order(): void {
+		$this->resetOrder( 'pending' );
+
+		$this->applyStatus( 'failed', 'AneePay: payment failed.' );
+
+		$this->assertSame( array( 'AneePay: payment failed.' ), \Order::$notes );
+		$this->assertSame( 'AneePay: payment failed.', \Order::$last_note );
+	}
+
+	/**
+	 * A note the merchant already wrote is kept, not replaced.
+	 *
+	 * @return void
+	 */
+	public function test_appends_to_the_note_the_merchant_wrote(): void {
+		$this->resetOrder( 'pending' );
+		\Order::$existing_note = 'Called the buyer about the delivery.';
+
+		$this->applyStatus( 'cancelled', 'AneePay: payment cancelled by the customer.' );
+
+		$this->assertSame(
+			"Called the buyer about the delivery.\nAneePay: payment cancelled by the customer.",
+			\Order::$last_note
+		);
+	}
+
+	/**
+	 * A delivery without a note writes nothing.
+	 *
+	 * @return void
+	 */
+	public function test_an_empty_note_does_not_touch_the_order(): void {
+		$this->resetOrder( 'pending' );
+
+		$this->applyStatus( 'success' );
+
+		$this->assertSame( '', \Order::$last_note );
+		$this->assertSame( array(), \Order::$notes );
 	}
 }

@@ -78,6 +78,10 @@ ps_aneepay/
   `event_id` (or `sha256(body)` for legacy payloads): a retry gets HTTP 200 and
   changes nothing, rows are pruned after 7 days, and a sandbox payment never
   completes a live order.
+- A webhook that changes the order state also appends a line to the order's
+  internal note, the one the admin order page shows. PrestaShop has no note per
+  history entry, only a single field on the order, so the plugin appends instead
+  of overwriting and keeps the merchant's own notes.
 - One mapping per order: `id_order` is unique. Duplicates from older releases
   are merged on the first write (newest row wins, keeps `stock_restored`), and
   the row is upserted, so `stock_restored` is never reset.

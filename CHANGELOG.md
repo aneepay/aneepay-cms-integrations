@@ -138,6 +138,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs out the page stops polling and shows an explicit "Check again" button, so
   a slow confirmation is not mistaken for a dead page. OpenCart's result page now
   polls at all — it used to rely on the buyer reloading it by hand.
+- PrestaShop: the note a webhook adds to an order is actually stored. The webhook
+  built the text but `OrderHistory` has no note column, so it was silently
+  dropped. PrestaShop 1.7/8 keeps its "internal note" as a single field on the
+  order, so the note is appended there on its own line, keeping whatever the
+  merchant already wrote. WooCommerce and OpenCart already recorded it.
 
 ## [1.2.0] - 2026-10-22
 
