@@ -15,7 +15,7 @@
  * Currencies without an ECB reference rate (RUB, for example) skip the network
  * call on purpose and use the store rate; the settings page warns the merchant.
  */
-class AneePay_Usd_Converter {
+class AneePay_Token_Converter {
 	/**
 	 * Currencies with an ECB reference rate (the set served by Frankfurter).
 	 *

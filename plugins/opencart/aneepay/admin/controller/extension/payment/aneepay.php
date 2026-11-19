@@ -307,11 +307,11 @@ class ControllerExtensionPaymentAneePay extends Controller {
 	protected function rate_warning($rate_source, $currency_code, $manual_rate) {
 		$currency_code = strtoupper(trim((string) $currency_code));
 
-		if (!class_exists('AneePay_Usd_Converter')) {
+		if (!class_exists('AneePay_Token_Converter')) {
 			require_once DIR_SYSTEM . 'library/aneepay/usd-converter.php';
 		}
 
-		if ('manual' === $rate_source || AneePay_Usd_Converter::is_ecb_currency($currency_code)) {
+		if ('manual' === $rate_source || AneePay_Token_Converter::is_ecb_currency($currency_code)) {
 			return '';
 		}
 
@@ -365,7 +365,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			require_once $base . 'aneepay.php';
 		}
 
-		if (!class_exists('AneePay_Usd_Converter')) {
+		if (!class_exists('AneePay_Token_Converter')) {
 			require_once $base . 'usd-converter.php';
 		}
 
@@ -654,7 +654,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$this->load_lib();
 
 		$client = $this->admin_client();
-		$converter = new AneePay_Usd_Converter($client);
+		$converter = new AneePay_Token_Converter($client);
 
 		$sample   = 150.0;
 		$currency = (string) $this->config->get('config_currency');

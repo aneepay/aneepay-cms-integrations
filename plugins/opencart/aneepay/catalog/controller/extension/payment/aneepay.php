@@ -25,7 +25,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 			require_once $base . 'aneepay.php';
 		}
 
-		if (!class_exists('AneePay_Usd_Converter')) {
+		if (!class_exists('AneePay_Token_Converter')) {
 			require_once $base . 'usd-converter.php';
 		}
 
@@ -189,7 +189,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 		$token_amount = '';
 
 		try {
-			$converter = new AneePay_Usd_Converter($client);
+			$converter = new AneePay_Token_Converter($client);
 			$client->set_config('store_rate', $this->store_rate((string) $order_info['currency_code']));
 
 			$converted = $converter->convert((float) $order_info['total'], (string) $order_info['currency_code']);
@@ -291,7 +291,7 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 		$client = $this->client();
 		$client->set_config('store_rate', $this->store_rate($currency));
-		$converter = new AneePay_Usd_Converter($client);
+		$converter = new AneePay_Token_Converter($client);
 
 		try {
 			$converted = $converter->convert($total, $currency);
