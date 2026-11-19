@@ -75,6 +75,44 @@ if ( ! function_exists( '__' ) ) {
 	}
 }
 
+if ( ! function_exists( 'sanitize_key' ) ) {
+	/**
+	 * Lowercase and keep the characters WordPress allows in a key.
+	 *
+	 * @param string $key Raw key.
+	 * @return string
+	 */
+	function sanitize_key( $key ) {
+		return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $key ) );
+	}
+}
+
+if ( ! function_exists( 'sanitize_text_field' ) ) {
+	/**
+	 * Strip tags and line breaks, mirroring WordPress closely enough for tests.
+	 *
+	 * @param string $value Raw value.
+	 * @return string
+	 */
+	function sanitize_text_field( $value ) {
+		return trim( preg_replace( '/[\r\n\t ]+/', ' ', strip_tags( (string) $value ) ) );
+	}
+}
+
+if ( ! function_exists( 'wc_increase_stock_levels' ) ) {
+	/**
+	 * Count stock restorations instead of touching a database.
+	 *
+	 * @param int $order_id Order id.
+	 * @return void
+	 */
+	function wc_increase_stock_levels( $order_id ) {
+		$GLOBALS['aneepay_test_restock_count'] = isset( $GLOBALS['aneepay_test_restock_count'] )
+			? (int) $GLOBALS['aneepay_test_restock_count'] + 1
+			: 1;
+	}
+}
+
 if ( ! function_exists( 'get_woocommerce_currency' ) ) {
 	/**
 	 * Store currency for the converter, controlled per test.

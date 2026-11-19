@@ -21,10 +21,16 @@ require_once $plugin_root . '/woocommerce/aneepay/includes/class-wc-gateway-cryp
 require_once $plugin_root . '/woocommerce/aneepay/includes/class-usd-converter.php';
 
 // OpenCart: the API client carries signature verification and operation_id.
+defined( 'DB_PREFIX' ) || define( 'DB_PREFIX', 'oc_' );
+
 require_once $plugin_root . '/opencart/aneepay/system/library/aneepay/aneepay.php';
 require_once $plugin_root . '/opencart/aneepay/system/library/aneepay/usd-converter.php';
+require_once $plugin_root . '/opencart/aneepay/system/library/aneepay/webhook.php';
 
 // PrestaShop: same responsibilities on the AneePayApi class.
+require_once __DIR__ . '/stubs/prestashop.php';
+
 require_once $plugin_root . '/prestashop/ps_aneepay/classes/AneePayApiException.php';
 require_once $plugin_root . '/prestashop/ps_aneepay/classes/AneePayApi.php';
 require_once $plugin_root . '/prestashop/ps_aneepay/classes/AneePayUsdConverter.php';
+require_once $plugin_root . '/prestashop/ps_aneepay/classes/AneePayWebhook.php';
