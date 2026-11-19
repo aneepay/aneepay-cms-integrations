@@ -116,6 +116,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- OpenCart, PrestaShop: `Abandoned Payment Expiry` of `0` now really disables the
+  expiry, as the field has always promised and as WooCommerce already did. Both
+  crons used to coerce `0` back to 120 minutes, so a shop that asked to keep
+  abandoned orders open still had them cancelled and their stock released on the
+  next run.
 - The result page resolves the payment status on the server (OpenCart,
   PrestaShop): the `success`/`fail` page asks `GET /payments/{id}` before it
   renders, so a declined or abandoned payment is visible even with JavaScript

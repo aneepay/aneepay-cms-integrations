@@ -724,11 +724,9 @@ class ControllerExtensionPaymentAneePay extends Controller {
 
 			$client->prune_log();
 
-			$expiry_minutes = (int) $this->config->get('payment_aneepay_expiry_minutes');
-
-			if ($expiry_minutes <= 0) {
-				$expiry_minutes = 120;
-			}
+			// 0 disables expiry: the cron only reports statuses then, it never
+			// cancels an abandoned order and never releases its stock.
+			$expiry_minutes = max(0, (int) $this->config->get('payment_aneepay_expiry_minutes'));
 
 			foreach ($this->model_extension_payment_aneepay->getPendingOrders(100, 7) as $row) {
 				$order_id = (int) $row['order_id'];

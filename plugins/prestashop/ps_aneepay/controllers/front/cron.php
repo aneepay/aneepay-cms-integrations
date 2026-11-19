@@ -39,11 +39,9 @@ class Ps_AneepayCronModuleFrontController extends ModuleFrontController {
 			// Retention: drop log rows older than the window on every run.
 			$api->pruneLog();
 
-			$expiry_minutes = (int) Configuration::get('ANEEPAY_EXPIRY_MINUTES');
-
-			if ($expiry_minutes <= 0) {
-				$expiry_minutes = 120;
-			}
+			// 0 disables expiry: the cron only reports statuses then, it never
+			// cancels an abandoned order and never releases its stock.
+			$expiry_minutes = max(0, (int) Configuration::get('ANEEPAY_EXPIRY_MINUTES'));
 
 			foreach ($orders->getPendingOrders(100, 7) as $row) {
 				$id_order = (int) $row['id_order'];
