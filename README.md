@@ -59,6 +59,11 @@ the suite on PHP 7.4, 8.0 and 8.3, and each matrix entry also runs
 `./scripts/pack.sh check`, so a syntax error that only parses on 8.x cannot
 reach a release. `vendor/` and `composer.lock` are not committed.
 
+The webhook endpoint itself is outside what unit tests can prove — the header
+name, the raw body and the deduplication only exist behind a real request.
+[`docs/WEBHOOK-SMOKE.md`](docs/WEBHOOK-SMOKE.md) is the manual checklist to run
+before a release.
+
 ## Local development
 
 ### WooCommerce
