@@ -114,6 +114,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   freshness window was removed, since authorisation rests on the signature and
   replays are stopped by the event log.
 
+### Fixed
+
+- The result page resolves the payment status on the server (OpenCart,
+  PrestaShop): the `success`/`fail` page asks `GET /payments/{id}` before it
+  renders, so a declined or abandoned payment is visible even with JavaScript
+  disabled — a failed payment never produces a webhook, only a lookup sees it.
+  An already terminal status is not re-checked and the lookup is cached for
+  5 seconds per order, so reloading the page cannot flood the API. The page
+  shows *paid*, *failed* or *pending* (instead of a generic waiting screen) and
+  only offers "Try again" for a failed payment, so a buyer who actually paid is
+  never sent back to the checkout.
+
 ## [1.2.0] - 2026-10-22
 
 Security and stability batch produced by the plugin audit.

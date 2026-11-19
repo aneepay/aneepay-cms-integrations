@@ -59,6 +59,12 @@ ps_aneepay/
   hour, and `rate_source` in the mapping records which rate was applied.
 - Order metadata is stored in the `ps_aneepay_order` table; the webhook resolves
   the order by `payment_id` / `operation_id` (128-bit int, kept exact) or `#N`.
+- The success/fail pages resolve the status on the server before rendering
+  (`GET /payments/{id}`, throttled to one call per order per 5 seconds), so the
+  real outcome is visible with JavaScript disabled — a failed payment is only
+  ever visible through the API, never through a webhook. The page shows paid,
+  failed or pending, and "Try again" only for a failed payment, so a buyer who
+  actually paid is never sent back to the checkout.
 - Webhook deliveries are deduplicated in the `ps_aneepay_event` table by
   `event_id` (or `sha256(body)` for legacy payloads): a retry gets HTTP 200 and
   changes nothing, rows are pruned after 7 days, and a sandbox payment never

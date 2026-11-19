@@ -1581,6 +1581,125 @@ class Ps_Aneepay extends PaymentModule {
 	}
 
 	/**
+	 * How long a result-page status re-check is cached for (seconds).
+	 *
+	 * Short on purpose: the page must reflect a webhook delivered while the
+	 * buyer was redirected, but reloading it in a loop must not hammer the API.
+	 */
+	const RESULT_SYNC_TTL = 5;
+
+	/**
+	 * Ask AneePay for the current payment status before rendering a result page.
+	 *
+	 * AneePay only ever pushes a webhook for `success`; a declined or abandoned
+	 * payment is visible through GET /payments/{id} alone. Doing the lookup
+	 * server-side is therefore the only way a buyer without JavaScript (or one
+	 * who merely reopened the page) ever learns the outcome.
+	 *
+	 * Throttled per order by RESULT_SYNC_TTL seconds. PrestaShop's cookie is one
+	 * encrypted jar and ignores a per-key expiry, so the deadline lives inside
+	 * the value.
+	 *
+	 * @param int $id_order Order id.
+	 *
+	 * @return string Payment status ('' when the order has no mapping yet)
+	 */
+	public function syncOrderStatus($id_order)
+	{
+		$id_order = (int) $id_order;
+
+		if ($id_order <= 0) {
+			return '';
+		}
+
+		$order_model = new AneePayOrder();
+		$row         = $order_model->getByOrder($id_order);
+		$status      = ($row && isset($row['payment_status'])) ? (string) $row['payment_status'] : '';
+
+		// Nothing to ask the API about: no payment, an already terminal
+		// payment, or another request still creating the payment ("creating").
+		if (!$row || '' === (string) $row['payment_id'] || !in_array($status, array('', 'pending'), true)) {
+			return $status;
+		}
+
+		$throttle_key = 'aneepay_sync_' . $id_order;
+
+		if (isset($this->context->cookie->{$throttle_key}) && (int) $this->context->cookie->{$throttle_key} > time()) {
+			return $status;
+		}
+
+		$this->rememberStatusSync($throttle_key);
+
+		$api = null;
+
+		try {
+			$api  = $this->getApi();
+			$data = $api->get_payment((string) $row['payment_id']);
+
+			if (!is_array($data) || empty($data['status'])) {
+				return $status;
+			}
+
+			$status = (string) $data['status'];
+
+			$webhook = new AneePayWebhook($api, $order_model, $this->getStateMap());
+			$webhook->apply($id_order, $status);
+
+			return $status;
+		} catch (Throwable $e) {
+			// The page still renders with the last known status.
+			if ($api instanceof AneePayApi) {
+				$api->write_log('result', 'Order #' . $id_order . ': ' . $e->getMessage(), 'error');
+			} else {
+				error_log('AneePay result sync: ' . $e->getMessage());
+			}
+
+			return $status;
+		}
+	}
+
+	/**
+	 * Record that a status re-check was just made for an order.
+	 *
+	 * Only one throttle entry is kept: a buyer with a long order history must
+	 * not push the (4 KB limited) cookie jar towards its limit.
+	 *
+	 * @param string $throttle_key Cookie key of the current order.
+	 *
+	 * @return void
+	 */
+	protected function rememberStatusSync($throttle_key)
+	{
+		foreach (array_keys($this->context->cookie->getFamily('aneepay_sync_')) as $stale) {
+			if ($stale !== $throttle_key) {
+				$this->context->cookie->__unset($stale);
+			}
+		}
+
+		$this->context->cookie->__set($throttle_key, time() + self::RESULT_SYNC_TTL);
+	}
+
+	/**
+	 * Collapse a payment status into what the result page shows.
+	 *
+	 * @param string $status Payment status.
+	 *
+	 * @return string paid|failed|pending
+	 */
+	public function resultState($status)
+	{
+		if ('success' === $status) {
+			return 'paid';
+		}
+
+		if (in_array($status, array('failed', 'cancelled'), true)) {
+			return 'failed';
+		}
+
+		return 'pending';
+	}
+
+	/**
 	 * Data for the success/fail result page.
 	 *
 	 * @param bool $is_success Whether it is the success page.
@@ -1589,8 +1708,14 @@ class Ps_Aneepay extends PaymentModule {
 	public function resultData($is_success) {
 		$order_id = $this->resultOrderId();
 
+		// The webhook may still be in flight (or may never arrive for a failed
+		// payment), so ask the API before deciding what the page says.
+		$status = $order_id ? $this->syncOrderStatus($order_id) : '';
+		$state  = $this->resultState($status);
+
 		$data = array(
 			'is_success'   => (bool) $is_success,
+			'state'        => $state,
 			'order_id'     => $order_id,
 			'token'        => '',
 			'payment_id'   => '',

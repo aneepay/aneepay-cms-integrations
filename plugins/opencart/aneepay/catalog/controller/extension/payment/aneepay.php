@@ -4,6 +4,15 @@
  */
 class ControllerExtensionPaymentAneePay extends Controller {
 	/**
+	 * Seconds a result-page re-check is cached for.
+	 *
+	 * Short on purpose: the page must reflect a webhook that was delivered
+	 * while the buyer was redirected, but reloading it in a loop must not
+	 * hammer the API.
+	 */
+	const RESULT_SYNC_TTL = 5;
+
+	/**
 	 * Load the AneePay library classes (OC's library loader expects the class
 	 * name to match the file basename, so these are included directly).
 	 *
@@ -502,8 +511,89 @@ class ControllerExtensionPaymentAneePay extends Controller {
 	}
 
 	/**
+	 * Ask AneePay for the current payment status before rendering a result page.
+	 *
+	 * AneePay only ever pushes a webhook for `success`; a declined or
+	 * abandoned payment is visible through GET /payments/{id} alone. Doing the
+	 * lookup server-side is therefore the only way a buyer without JavaScript
+	 * (or one who merely reopened the page) ever learns the outcome — otherwise
+	 * the page waits forever.
+	 *
+	 * Throttled per order by RESULT_SYNC_TTL seconds so reloading the page
+	 * cannot be used to flood the API.
+	 *
+	 * @param int $order_id Order id.
+	 * @return string Payment status ('' when the order has no mapping yet).
+	 */
+	protected function sync_status($order_id) {
+		$order_id = (int) $order_id;
+		$mapping  = $order_id ? $this->model_extension_payment_aneepay->getByOrderId($order_id) : null;
+		$status   = ($mapping && isset($mapping['payment_status'])) ? (string) $mapping['payment_status'] : '';
+
+		// Nothing to ask the API about: no payment, an already terminal
+		// payment, or another request still creating the payment ("creating").
+		if (!$mapping || '' === (string) $mapping['payment_id'] || !in_array($status, array('', 'pending'), true)) {
+			return $status;
+		}
+
+		$cache_key = 'aneepay_result_' . $order_id;
+
+		if ($this->cache->get($cache_key)) {
+			return $status;
+		}
+
+		$this->cache->set($cache_key, 1, self::RESULT_SYNC_TTL);
+
+		$client = null;
+
+		try {
+			$client = $this->client();
+			$data   = $client->get_payment((string) $mapping['payment_id']);
+
+			if (!is_array($data) || empty($data['status'])) {
+				return $status;
+			}
+
+			$status = (string) $data['status'];
+
+			$webhook = new AneePay_Webhook($this->registry, $client, $this->status_map());
+			$webhook->apply($order_id, $status);
+
+			return $status;
+		} catch (Throwable $e) {
+			// The page still renders with the last known status.
+			if ($client instanceof AneePay_Client) {
+				$client->write_log('result', $e->getMessage(), 'error');
+			} else {
+				error_log('AneePay result sync: ' . $e->getMessage());
+			}
+
+			return $status;
+		}
+	}
+
+	/**
+	 * Collapse a payment status into what the result page shows.
+	 *
+	 * @param string $status Payment status.
+	 * @return string paid|failed|pending
+	 */
+	protected function result_state($status) {
+		if ('success' === $status) {
+			return 'paid';
+		}
+
+		if (in_array($status, array('failed', 'cancelled'), true)) {
+			return 'failed';
+		}
+
+		return 'pending';
+	}
+
+	/**
 	 * Result page after the buyer returns from AneePay (SUCCESS_URL / FAIL_URL
-	 * receive a ?result=... or ?payment=...; status is polled client-side).
+	 * receive a ?result=... or ?payment=...; the status is synced server-side
+	 * and also polled client-side).
 	 */
 	public function success() {
 		$this->load->language('extension/payment/aneepay');
@@ -546,8 +636,13 @@ class ControllerExtensionPaymentAneePay extends Controller {
 	 * @return array
 	 */
 	protected function result_facing($order_id, $is_success, $result = '', $payment = '') {
+		// The webhook may still be in flight (or may never arrive for a failed
+		// payment), so ask the API before deciding what the page says.
+		$state = $this->result_state($order_id ? $this->sync_status($order_id) : '');
+
 		$facing = array(
 			'is_success'      => $is_success,
+			'state'           => $state,
 			'result'          => $result,
 			'payment'         => $payment,
 			'order_id'        => $order_id,

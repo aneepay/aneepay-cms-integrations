@@ -1,8 +1,12 @@
-{{ page === 'success' ? text_success : text_failed }}
+{% if state == 'paid' %}
+	{{ text_success }}
+{% elseif state == 'failed' %}
+	{{ text_failed }}
+{% else %}
+	{{ text_pending }}
+{% endif %}
 
-{% if is_success %}
-	<p>{{ text_awaiting }}</p>
-
+{% if state != 'failed' %}
 	{% if order_id %}
 		<p>Order #{{ order_id }}</p>
 	{% endif %}
@@ -14,18 +18,25 @@
 	{% if token_amount and token %}
 		<p>{{ text_you_pay }}: {{ token_amount }} {{ token }}</p>
 	{% endif %}
+{% endif %}
+
+{% if state == 'failed' %}
+	{% if checkout_url %}
+		<p>
+			<a href="{{ checkout_url }}" class="btn btn-primary">{{ button_retry }}</a>
+		</p>
+	{% endif %}
+{% elseif state == 'pending' %}
+	<p>{{ text_awaiting }}</p>
 
 	<p>
 		<button id="aneepay-i-paid" class="btn btn-primary">{{ button_i_paid }}</button>
-	</p>
-{% else %}
-	<p>
-		<a href="{{ checkout_url }}" class="btn btn-primary">{{ button_retry }}</a>
 	</p>
 {% endif %}
 
 <p><a href="{{ shop_url }}">{{ button_shop }}</a></p>
 
+{% if state == 'pending' and order_id %}
 <script>
 (function () {
 	var orderId = {{ order_id|default(0) }};
@@ -51,3 +62,4 @@
 	});
 })();
 </script>
+{% endif %}
