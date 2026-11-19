@@ -8,6 +8,12 @@ on:
     tags: ['v*', '[0-9]*']
   pull_request:
 
+# Creating a GitHub Release needs write access to the repository contents.
+# The default token is read-only, which failed the release job with
+# "Resource not accessible by integration".
+permissions:
+  contents: write
+
 jobs:
   # Gate for every build and every release: the version has one source
   # (VERSION), matches the tag, and all plugins lint clean.
