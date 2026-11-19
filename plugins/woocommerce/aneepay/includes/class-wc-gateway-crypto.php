@@ -1527,14 +1527,16 @@ function aneepay_current_user_owns_order( $order ) {
  *
  * The result-page cookie is the only handle the store-side success/fail pages
  * have to identify the order. Signing it with the site auth salt prevents an
- * attacker from minting a cookie for an arbitrary order id (IDOR).
+ * attacker from minting a cookie for an arbitrary order id (IDOR). The lifetime
+ * is a day: a buyer who pays from an exchange or a wallet app can come back
+ * long after the redirect, and an hour was not enough for that.
  *
  * @param WC_Order $order Order object.
  * @return string Token of the form "<order_id>.<expiry>.<hmac>".
  */
 function aneepay_order_token( $order ) {
 	$order_id = (int) $order->get_id();
-	$expiry   = time() + HOUR_IN_SECONDS;
+	$expiry   = time() + DAY_IN_SECONDS;
 	$payload  = $order_id . '.' . $expiry;
 
 	return $payload . '.' . hash_hmac( 'sha256', $payload, wp_salt( 'auth' ) );
@@ -1547,11 +1549,15 @@ function aneepay_order_token( $order ) {
  * @return void
  */
 function aneepay_set_order_cookie( $order ) {
-	wc_setcookie( 'aneepay_order', aneepay_order_token( $order ), time() + HOUR_IN_SECONDS, is_ssl() );
+	wc_setcookie( 'aneepay_order', aneepay_order_token( $order ), time() + DAY_IN_SECONDS, is_ssl() );
 }
 
 /**
  * Resolve and validate the signed order cookie set at checkout.
+ *
+ * A valid cookie is renewed (24 hours from now, at most once a minute) so the
+ * result and status endpoints keep working for a buyer who is slow to pay or
+ * comes back after closing the tab.
  *
  * @return WC_Order|null Order only when the cookie signature and expiry are valid.
  */
@@ -1587,6 +1593,13 @@ function aneepay_get_cookie_order() {
 	$order = wc_get_order( absint( $order_id ) );
 
 	if ( $order && ANEEPAY_PAYMENT_GATEWAY_ID === $order->get_payment_method() ) {
+		// Renew on every view so the result page keeps working while the buyer
+		// waits for the confirmation. Rotating at most once a minute keeps the
+		// lifetime a day ahead without a Set-Cookie header on every poll.
+		if ( (int) $expiry - time() < DAY_IN_SECONDS - MINUTE_IN_SECONDS ) {
+			aneepay_set_order_cookie( $order );
+		}
+
 		return $order;
 	}
 

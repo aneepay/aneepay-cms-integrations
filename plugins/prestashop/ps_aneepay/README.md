@@ -45,6 +45,12 @@ ps_aneepay/
   action, the controller verifies it with `hash_equals` and spends it. Invalid
   or expired entries answer 403 without touching the cart, and more than 5
   attempts in 10 minutes are refused.
+- The result/check controllers identify the order through a signed cookie
+  (`<id_order>.<expiry>.<hmac>`). The expiry lives inside the value because
+  PrestaShop's `Cookie::__set()` has no per-key lifetime; it is 24 hours and is
+  renewed on every view, at most once a minute. The cookie jar's own expiry is
+  left alone: PrestaShop already makes it persistent for 20 days, and calling
+  `Cookie::setExpire()` would shorten the whole shopper session to our TTL.
 - The settings page adds a SANDBOX/LIVE badge, a "Test connection" button
   (`GET /accounts/{id}/payments`), an offline conversion preview, a request log
   panel (`ps_aneepay_log`) and the copyable STATUS/SUCCESS/FAIL/cron URLs.

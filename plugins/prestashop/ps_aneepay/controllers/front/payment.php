@@ -23,7 +23,7 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 		// Idempotency gate: reuse an existing pending hosted payment for this cart.
 		$existing = $order_model->getByCart((int) $cart->id);
 		if ($existing && !empty($existing['checkout_url']) && in_array((string) $existing['payment_status'], array('', 'pending'), true)) {
-			$this->context->cookie->__set('aneepay_order_id', $this->module->orderToken((int) $existing['id_order']), time() + 3600);
+			$this->module->setOrderCookie((int) $existing['id_order']);
 
 			$this->renderPending($existing);
 
@@ -128,7 +128,7 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 				if (null !== $found) {
 					$mapping = $this->persistMapping($order_model, $id_order, $cart, $api, $converted, $found, $total, $currency);
 
-					$this->context->cookie->__set('aneepay_order_id', $this->module->orderToken($id_order), time() + 3600);
+					$this->module->setOrderCookie($id_order);
 
 					$this->renderPending(array_merge(array('id_order' => $id_order), $mapping));
 
@@ -166,7 +166,7 @@ class Ps_AneepayPaymentModuleFrontController extends ModuleFrontController {
 
 		$mapping = $this->persistMapping($order_model, $id_order, $cart, $api, $converted, $created, $total, $currency);
 
-		$this->context->cookie->__set('aneepay_order_id', $this->module->orderToken($id_order), time() + 3600);
+		$this->module->setOrderCookie($id_order);
 
 		$this->renderPending(array_merge(array('id_order' => $id_order), $mapping));
 	}

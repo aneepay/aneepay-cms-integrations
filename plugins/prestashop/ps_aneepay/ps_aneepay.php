@@ -1264,6 +1264,15 @@ class Ps_Aneepay extends PaymentModule {
 	const PAYMENT_ATTEMPT_WINDOW = 600;
 
 	/**
+	 * Lifetime of the signed order cookie, in seconds.
+	 *
+	 * A buyer can pay from an exchange or a wallet app long after the redirect,
+	 * so the result pages must keep recognising the order for a day rather than
+	 * for an hour.
+	 */
+	const ORDER_COOKIE_TTL = 86400;
+
+	/**
 	 * Issue a one-time token for entering the payment controller.
 	 *
 	 * The token is bound to the cart: the signature covers the cart id, so a
@@ -1495,13 +1504,36 @@ class Ps_Aneepay extends PaymentModule {
 	 * @return string "<id_order>.<expiry>.<hmac>"
 	 */
 	public function orderToken($id_order) {
-		$payload = (int) $id_order . '.' . (time() + 3600);
+		$payload = (int) $id_order . '.' . (time() + self::ORDER_COOKIE_TTL);
 
 		return $payload . '.' . $this->signOrderPayload($payload);
 	}
 
 	/**
+	 * Store the signed order cookie that the result pages read.
+	 *
+	 * PrestaShop's Cookie is one encrypted jar, so __set() has no per-key
+	 * lifetime: the expiry travels inside the signed value (ORDER_COOKIE_TTL).
+	 * The jar's own expiry is left alone on purpose — PrestaShop already gives
+	 * it 20 days, and setExpire() here would shorten the shopper's whole
+	 * session (cart, login) to this cookie's lifetime.
+	 *
+	 * @param int $id_order Order id.
+	 * @return void
+	 */
+	public function setOrderCookie($id_order) {
+		if (headers_sent()) {
+			return;
+		}
+
+		$this->context->cookie->__set('aneepay_order_id', $this->orderToken($id_order));
+	}
+
+	/**
 	 * Read the signed order cookie and return the validated order id.
+	 *
+	 * A valid token is renewed (24 hours from now, at most once a minute) so a
+	 * buyer who is slow to pay still sees the real result instead of a 403.
 	 *
 	 * @return int Order id, or 0 when the cookie is missing/invalid/forged.
 	 */
@@ -1532,6 +1564,10 @@ class Ps_Aneepay extends PaymentModule {
 
 		if (!hash_equals($this->signOrderPayload($payload), (string) $signature)) {
 			return 0;
+		}
+
+		if ((int) $expiry - time() < self::ORDER_COOKIE_TTL - 60) {
+			$this->setOrderCookie((int) $id_order);
 		}
 
 		return (int) $id_order;

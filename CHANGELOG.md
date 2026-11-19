@@ -125,6 +125,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows *paid*, *failed* or *pending* (instead of a generic waiting screen) and
   only offers "Try again" for a failed payment, so a buyer who actually paid is
   never sent back to the checkout.
+- The result-page cookie lives 24 hours and is renewed on every view (at most
+  once a minute) instead of expiring after one hour with no renewal: a buyer who
+  pays from an exchange, or comes back after closing the tab, still gets the real
+  result page instead of a 403 (WooCommerce, PrestaShop). PrestaShop keeps the
+  expiry inside the signed value, because its `Cookie::__set()` has no per-key
+  lifetime, and leaves the cookie jar's own 20-day expiry alone — `setExpire()`
+  there would shorten the shopper's whole session to our TTL.
 
 ## [1.2.0] - 2026-10-22
 
