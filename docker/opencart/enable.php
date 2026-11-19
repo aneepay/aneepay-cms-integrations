@@ -37,9 +37,10 @@ q($db, "CREATE TABLE IF NOT EXISTS `{$prefix}aneepay_order` (
 	`usd_amount` VARCHAR(32) NOT NULL DEFAULT '',
 	`fiat_per_usd` VARCHAR(32) NOT NULL DEFAULT '',
 	`rate_source` VARCHAR(16) NOT NULL DEFAULT '',
+	`stock_restored` TINYINT(1) NOT NULL DEFAULT 0,
 	`date_added` DATETIME NOT NULL,
 	PRIMARY KEY (`id`),
-	KEY `order_id` (`order_id`),
+	UNIQUE KEY `order_id` (`order_id`),
 	KEY `payment_id` (`payment_id`),
 	KEY `operation_id` (`operation_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
@@ -51,6 +52,19 @@ q($db, "CREATE TABLE IF NOT EXISTS `{$prefix}aneepay_log` (
 	`level` VARCHAR(16) NOT NULL DEFAULT 'info',
 	`date_added` DATETIME NOT NULL,
 	PRIMARY KEY (`log_id`),
+	KEY `date_added` (`date_added`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+
+q($db, "CREATE TABLE IF NOT EXISTS `{$prefix}aneepay_event` (
+	`event_key` VARCHAR(80) NOT NULL,
+	`event_id` VARCHAR(64) NOT NULL DEFAULT '',
+	`payment_id` VARCHAR(64) NOT NULL DEFAULT '',
+	`order_ref` VARCHAR(64) NOT NULL DEFAULT '',
+	`status` VARCHAR(16) NOT NULL DEFAULT '',
+	`is_sandbox` TINYINT(1) NOT NULL DEFAULT 0,
+	`outcome` VARCHAR(32) NOT NULL DEFAULT '',
+	`date_added` DATETIME NOT NULL,
+	PRIMARY KEY (`event_key`),
 	KEY `date_added` (`date_added`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
 
