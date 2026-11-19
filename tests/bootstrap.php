@@ -18,10 +18,13 @@ $plugin_root = dirname( __DIR__ ) . '/plugins';
 // WooCommerce: the webhook signature and operation_id helpers live in the
 // gateway file, next to the class that uses them.
 require_once $plugin_root . '/woocommerce/aneepay/includes/class-wc-gateway-crypto.php';
+require_once $plugin_root . '/woocommerce/aneepay/includes/class-usd-converter.php';
 
 // OpenCart: the API client carries signature verification and operation_id.
 require_once $plugin_root . '/opencart/aneepay/system/library/aneepay/aneepay.php';
+require_once $plugin_root . '/opencart/aneepay/system/library/aneepay/usd-converter.php';
 
 // PrestaShop: same responsibilities on the AneePayApi class.
 require_once $plugin_root . '/prestashop/ps_aneepay/classes/AneePayApiException.php';
 require_once $plugin_root . '/prestashop/ps_aneepay/classes/AneePayApi.php';
+require_once $plugin_root . '/prestashop/ps_aneepay/classes/AneePayUsdConverter.php';

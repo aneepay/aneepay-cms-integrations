@@ -7,6 +7,7 @@
         "php": ">=7.4"
     },
     "require-dev": {
+        "doctrine/instantiator": "^1.4",
         "phpunit/phpunit": "^9.6"
     },
     "autoload-dev": {
